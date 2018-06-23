@@ -17,7 +17,7 @@ public Plugin myinfo =
 
 bool recording = false, playback = false;
 
-float startPos[3], prevAngle[3];
+float startPos[3], startAngle[3], prevAngle[3];
 
 File file;
 
@@ -54,19 +54,18 @@ public Action CmdRecord(int client, int args)
     }
     
     GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", startPos);
-    float a[3];
-    GetClientEyeAngles(client, a);
-    prevAngle[0] = a[0];
-    prevAngle[1] = a[1];
+    GetClientEyeAngles(client, startAngle);
+    prevAngle[0] = startAngle[0];
+    prevAngle[1] = startAngle[1];
     
     file = OpenFile(path, "w+");
     if(file == INVALID_HANDLE)
     {
-        PrintToChat(client, "Something went wrong :()");
+        PrintToChat(client, "Something went wrong :(");
         PrintToServer("Invalid file handle");
         return;
     }
-    file.WriteLine("%f,%f,%f,%f,%f", startPos[0],startPos[1],startPos[2], a[0], a[1]);
+    file.WriteLine("%f,%f,%f,%f,%f", startPos[0],startPos[1],startPos[2], startAngle[0], startAngle[1]);
     
     recording = true;
     playback = false;
@@ -124,7 +123,6 @@ public Action CmdPlayback(int client, int args)
         
         if(n == 5)
         {
-            float sP[3], sA[3];
             for(int i=0; i<n; i++)
             {
                 if(strlen(bu[i]) < 1)
@@ -135,13 +133,13 @@ public Action CmdPlayback(int client, int args)
                     return;
                 }
                 if(i < 3)
-                    sP[i] = StringToFloat(bu[i]);
+                    startPos[i] = StringToFloat(bu[i]);
                 else
-                    sA[i-3] = StringToFloat(bu[i]);
+                    startAngle[i-3] = StringToFloat(bu[i]);
             }
-            TeleportEntity(client, sP, sA, NULL_VECTOR);
-            prevAngle[0] = sA[0];
-            prevAngle[1] = sA[1];
+            TeleportEntity(client, startPos, startAngle, NULL_VECTOR);
+            prevAngle[0] = startAngle[0];
+            prevAngle[1] = startAngle[1];
         }
         else
         {
