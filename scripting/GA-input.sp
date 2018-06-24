@@ -50,12 +50,13 @@ int simTick = 0;
 int targetGen = 0;
 int curGen = 0;
 
-int GAIndividualInputsInt[400][12][8];
+int GAIndividualInputsInt[400][12];
 float GAIndividualInputsFloat[400][12][2];
 float GAIndividualFitness[12];
 bool GAIndividualMeasured[12];
 bool population = false;
 bool GAplayback = false;
+int PossibleButtons[8] = {IN_ATTACK, IN_ATTACK2, IN_JUMP, IN_DUCK, IN_FORWARD, IN_BACK, IN_MOVELEFT, IN_MOVERIGHT};
 
 public Action CmdClear(int client, int args)
 {
@@ -129,22 +130,25 @@ public void GeneratePopulation()
     {
         for(int p=0; p < populationSize; p++)
         {
-            for(int i=0; i<8; i++)
+            for(int i=0; i<sizeof(PossibleButtons); i++)
             {
                 // random key inputs
                 if(GetRandomInt(0, 100) > 90)
                 {
-                    GAIndividualInputsInt[t][p][i] = 1;
+                    if(GAIndividualInputsInt[t][p] & PossibleButtons[i])
+                    	GAIndividualInputsInt[t][p] &= ~PossibleButtons[i];
+                	else
+                		GAIndividualInputsInt[t][p] |= PossibleButtons[i];
                 }
                     
                 // chance for inputs to be duplicated from previous tick
                 if(t != 0)
                 {
-                    if(GAIndividualInputsInt[t-1][p][i] == 1)
+                    if(GAIndividualInputsInt[t-1][p] & PossibleButtons[i])
                     {
                         if(GetRandomInt(0, 100) > 20)
                         {
-                            GAIndividualInputsInt[t][p][i] = 1;
+                            GAIndividualInputsInt[t][p] |= PossibleButtons[i];
                         }                            
                     }
                 }
@@ -152,12 +156,12 @@ public void GeneratePopulation()
             // random mouse movement
             if(GetRandomInt(0,100) > 80)
             {
-                GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-50.0, 50.0);
-                GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-50.0, 50.0);
+                GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-10.0, 10.0);
+                GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-10.0, 10.0);
             }
             
             // chance for inputs to be duplicated from previous tick
-            if(t != 0)
+            /*if(t != 0)
             {
                 for(int a=0; a<2; a++)
                 {
@@ -169,7 +173,7 @@ public void GeneratePopulation()
                         }                        
                     }
                 }
-            }
+            }*/
         }
     }
     PrintToServer("Population generated!");
@@ -199,15 +203,8 @@ public void CalculateFitness(int individual)
         file = OpenFile("runs/GA", "w+");
         for(int i=0; i<simTicks; i++)
         {
-            file.WriteLine("%d,%d,%d,%d,%d,%d,%d,%d,%f,%f", 
-                GAIndividualInputsInt[i][individual][0],
-                GAIndividualInputsInt[i][individual][1],
-                GAIndividualInputsInt[i][individual][2],
-                GAIndividualInputsInt[i][individual][3],
-                GAIndividualInputsInt[i][individual][4],
-                GAIndividualInputsInt[i][individual][5],
-                GAIndividualInputsInt[i][individual][6],
-                GAIndividualInputsInt[i][individual][7],
+            file.WriteLine("%d,%f,%f", 
+                GAIndividualInputsInt[i][individual],
                 GAIndividualInputsFloat[i][individual][0],
                 GAIndividualInputsFloat[i][individual][1]);
         }
@@ -307,19 +304,27 @@ public void Breed()
                 for(int a=0; a<8; a++)
                 {
                     int cross = GetRandomInt(0, 1);
-                    GAIndividualInputsInt[t][i][a] = GAIndividualInputsInt[t][parents[p][cross]][a];
+                    if(GAIndividualInputsInt[t][parents[p][cross]] & PossibleButtons[a])
+                    	GAIndividualInputsInt[t][i] |= PossibleButtons[a];
+                	else
+                		GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
                     // random mutations
                     if(GetRandomInt(0, 100) > 80)
                     {
-                        GAIndividualInputsInt[t][i][a] = GAIndividualInputsInt[t][i][a] == 1 ? 0 : 1;
+                        if(GAIndividualInputsInt[t][i] & PossibleButtons[a])
+                        	GAIndividualInputsInt[t][i] |= PossibleButtons[a];
+                    	else
+                    		GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
                     }
                     // chance for inputs to be duplicated from previous tick
                     if(t != 0)
-                    {
-                        if(GAIndividualInputsInt[t-1][i][a] == 1)
+					{
+                        if(GetRandomInt(0, 100) > 20)
                         {
-                            if(GetRandomInt(0, 100) > 20)
-                                GAIndividualInputsInt[t][i][a] = 1;
+	                        if(GAIndividualInputsInt[t-1][i] & PossibleButtons[a])
+								GAIndividualInputsInt[t][i] |= PossibleButtons[a];
+							else
+								GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
                         }
                     }
                 }
@@ -330,17 +335,17 @@ public void Breed()
                     // random mutations
                     if(GetRandomInt(0, 100) > 80)
                     {
-                        GAIndividualInputsFloat[t][i][a] += GetRandomFloat(-20.0, 20.0);
+                        GAIndividualInputsFloat[t][i][a] += GetRandomFloat(-10.0, 10.0);
                     }
                     // chance for inputs to be duplicated from previous tick
-                    if(t != 0)
+                    /*if(t != 0)
                     {
                         if(GAIndividualInputsFloat[t-1][i][a] > 0 || GAIndividualInputsFloat[t-1][i][a] < 0)
                         {
                             if(GetRandomInt(0, 100) > 20)
                                 GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t-1][i][a];
                         }
-                    }
+                    }*/
                 }
             }
             GAIndividualMeasured[i] = false;
@@ -391,10 +396,12 @@ public Action CmdRecord(int client, int args)
         PrintToServer("Invalid file handle");
         return;
     }
-    file.WriteLine("%f,%f,%f,%f,%f", startPos[0],startPos[1],startPos[2], startAngle[0], startAngle[1]);
+    file.WriteLine("%f,%f,%f,%f,%f", startPos[0], startPos[1], startPos[2], startAngle[0], startAngle[1]);
     
+    simClient = client;
     recording = true;
     playback = false;
+    simulating = false;
     PrintToChat(client, "Recording started!");
 }
 
@@ -409,6 +416,7 @@ public Action CmdStopRecord(int client, int args)
         file.Close();
     recording = false;
     playback = false;
+    simulating = false;
     PrintToChat(client, "Recording stopped!");
 }
 
@@ -475,9 +483,10 @@ public Action CmdPlayback(int client, int args)
             return;
         }
     }
-    
+    simClient = client;
     recording = false;
     playback = true;
+    simulating = false;
     PrintToChat(client, "Playback started!");
 }
 
@@ -539,31 +548,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 
                 return Plugin_Continue;
             }
-            buttons = 0;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][0] == 1)
-                buttons |= IN_ATTACK;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][1] == 1)
-                buttons |= IN_ATTACK2;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][2] == 1)
-                buttons |= IN_JUMP;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][3] == 1)
-                buttons |= IN_DUCK;
-    
-            if(GAIndividualInputsInt[simTick][simIndex][4] == 1)
-                buttons |= IN_FORWARD;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][5] == 1)
-                buttons |= IN_BACK;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][6] == 1)
-                buttons |= IN_MOVELEFT;
-            
-            if(GAIndividualInputsInt[simTick][simIndex][7] == 1)
-                buttons |= IN_MOVERIGHT;
+            buttons = GAIndividualInputsInt[simTick][simIndex];
             
             buttons |= IN_RELOAD; // Autoreload
                 
@@ -581,8 +566,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             else if (buttons & IN_MOVERIGHT)
                 vel[1] = 280.0;
                 
-            prevAngle[0] += GAIndividualInputsInt[simTick][simIndex][0];
-            prevAngle[1] += GAIndividualInputsInt[simTick][simIndex][1];
+            prevAngle[0] += GAIndividualInputsFloat[simTick][simIndex][0];
+            prevAngle[1] += GAIndividualInputsFloat[simTick][simIndex][1];
             if(prevAngle[0] > 89.000000)
                 prevAngle[0] = 89.000000;
             else if(prevAngle[0] < -89.000000)
@@ -605,6 +590,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     }
     if(recording)
     {
+        if(client != simClient)
+            return Plugin_Continue;
+
         float dAng[2];
         dAng[0] = angles[0] - prevAngle[0];
         dAng[1] = angles[1] - prevAngle[1];
@@ -614,17 +602,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         else if(dAng[1] < -180)
             dAng[1] += 360;
         
-        file.WriteLine("%d,%d,%d,%d,%d,%d,%d,%d,%f,%f",
-                buttons & IN_ATTACK ? 1 : 0,
-                buttons & IN_ATTACK2 ? 1 : 0,
-                buttons & IN_JUMP ? 1 : 0,
-                buttons & IN_DUCK ? 1 : 0,
-                buttons & IN_FORWARD ? 1 : 0,
-                buttons & IN_BACK ? 1 : 0,
-                buttons & IN_MOVELEFT ? 1 : 0,
-                buttons & IN_MOVERIGHT ? 1 : 0,
-                dAng[0],
-                dAng[1]);
+        file.WriteLine("%d,%f,%f", buttons, dAng[0], dAng[1]);
         
         for(int i = 0; i < 2; i++)
         {
@@ -633,70 +611,27 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     }
     else if(playback)
     {
+        if(client != simClient)
+            return Plugin_Continue;
+            
         if(file.EndOfFile())
         {
             StopPlayback();
             return Plugin_Continue;
         }
         
-        buttons = 0;
-        
         char buffer[128];
         if(file.ReadLine(buffer, sizeof(buffer)))
         {
-            char bu[10][8];
+            char butt[3][8];
             
-            int n = ExplodeString(buffer, ",", bu, 10, 8);
-            if(n == 10)
+            int n = ExplodeString(buffer, ",", butt, 3, 8);
+            if(n == 3)
             {
-                int butt[8];
-                for(int i=0; i<8; i++)
-                {
-                    butt[i] = StringToInt(bu[i]);
-                }
-                
-                if(butt[0] == 1)
-                    buttons |= IN_ATTACK;
-                else
-                    buttons &= ~IN_ATTACK;
-                
-                if(butt[1] == 1)
-                    buttons |= IN_ATTACK2;
-                else
-                    buttons &= ~IN_ATTACK2;
-                
-                if(butt[2] == 1)
-                    buttons |= IN_JUMP;
-                else
-                    buttons &= ~IN_JUMP;
-                
-                if(butt[3] == 1)
-                    buttons |= IN_DUCK;
-                else
-                    buttons &= ~IN_DUCK;
-                
-                if(butt[4] == 1)
-                    buttons |= IN_FORWARD;
-                else
-                    buttons &= ~IN_FORWARD;
-                
-                if(butt[5] == 1)
-                    buttons |= IN_BACK;
-                else
-                    buttons &= ~IN_BACK;
-                
-                if(butt[6] == 1)
-                    buttons |= IN_MOVELEFT;
-                else
-                    buttons &= ~IN_MOVELEFT;
-                
-                if(butt[7] == 1)
-                    buttons |= IN_MOVERIGHT;
-                else
-                    buttons &= ~IN_MOVERIGHT;
+                buttons = StringToInt(butt[0]);
                         
                 buttons |= IN_RELOAD; // Autoreload
-            
+                
                 if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
                     vel[0] = 0.0;
                 else if (buttons & IN_FORWARD)
@@ -711,16 +646,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 else if (buttons & IN_MOVERIGHT)
                     vel[1] = 280.0;
                 
-                prevAngle[0] += StringToFloat(bu[sizeof(bu)-2]);
-                prevAngle[1] += StringToFloat(bu[sizeof(bu)-1]);
-                if(prevAngle[0] > 89.000000)
-                    prevAngle[0] = 89.000000;
-                else if(prevAngle[0] < -89.000000)
-                    prevAngle[0] = -89.000000;
-                if(prevAngle[1] > 180.000000)
-                    prevAngle[1] -= 360.000000;
-                else if(prevAngle[1] < -180.000000)
-                    prevAngle[1] += 360.000000;
+                prevAngle[0] += StringToFloat(butt[1]);
+                prevAngle[1] += StringToFloat(butt[2]);
+                if(prevAngle[0] > 89.0)
+                    prevAngle[0] = 89.0;
+                else if(prevAngle[0] < -89.0)
+                    prevAngle[0] = -89.0;
+                if(prevAngle[1] > 180.0)
+                    prevAngle[1] -= 360.0;
+                else if(prevAngle[1] < -180.0)
+                    prevAngle[1] += 360.0;
                 TeleportEntity(client, NULL_VECTOR, prevAngle, NULL_VECTOR);
 
                 return Plugin_Changed;
