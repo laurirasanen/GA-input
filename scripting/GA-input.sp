@@ -92,11 +92,11 @@ public Action CmdLoop(int client, int args)
         targetGen += gen;
         if(!population)
         {
-        	GeneratePopulation();
-        	return;
+            GeneratePopulation();
+            return;
         }          
         
-    	if(targetGen > curGen)
+        if(targetGen > curGen)
             Breed();
     }        
     else
@@ -114,10 +114,10 @@ public Action CmdPlay(int client, int args)
     int index = 0;
     if(StringToIntEx(arg, index))
     {
-		simIndex = index;
-		GAplayback = true;
-		MeasureFitness(index);
-		PrintToChat(client, "Simulating %d-%d", curGen, index);
+        simIndex = index;
+        GAplayback = true;
+        MeasureFitness(index);
+        PrintToChat(client, "Simulating %d-%d", curGen, index);
     }        
     else
         PrintToChat(client, "Couldn't parse number");
@@ -131,30 +131,53 @@ public void GeneratePopulation()
         {
             for(int i=0; i<8; i++)
             {
-                GAIndividualInputsInt[t][p][i] = GetRandomInt(0, 1);
+                // random key inputs
+                if(GetRandomInt(0, 100) > 90)
+                {
+                    GAIndividualInputsInt[t][p][i] = 1;
+                }
+                    
+                // chance for inputs to be duplicated from previous tick
+                if(t != 0)
+                {
+                    if(GAIndividualInputsInt[t-1][p][i] == 1)
+                    {
+                        if(GetRandomInt(0, 100) > 20)
+                        {
+                            GAIndividualInputsInt[t][p][i] = 1;
+                        }                            
+                    }
+                }
             }
-            GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-10, 10);
-            GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-10, 10);
+            // random mouse movement
+            if(GetRandomInt(0,100) > 80)
+            {
+                GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-50.0, 50.0);
+                GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-50.0, 50.0);
+            }
+            
+            // chance for inputs to be duplicated from previous tick
+            if(t != 0)
+            {
+                for(int a=0; a<2; a++)
+                {
+                    if(GAIndividualInputsFloat[t-1][p][a] > 0 || GAIndividualInputsFloat[t-1][p][a] < 0)
+                    {
+                        if(GetRandomInt(0, 100) > 20)
+                        {
+                            GAIndividualInputsFloat[t][p][a] = GAIndividualInputsFloat[t-1][p][a];
+                        }                        
+                    }
+                }
+            }
         }
     }
     PrintToServer("Population generated!");
     population = true;
     curGen = 0;
-    //PrintToServer("First input of each individual:");
     for(int i=0;i<populationSize; i++)
     {
         GAIndividualMeasured[i] = false;
-        /*PrintToServer("%d, %d, %d, %d, %d, %d, %d, %d, %f, %f",
-            GAIndividualInputsInt[0][i][0],
-            GAIndividualInputsInt[0][i][1],
-            GAIndividualInputsInt[0][i][2],
-            GAIndividualInputsInt[0][i][3],
-            GAIndividualInputsInt[0][i][4],
-            GAIndividualInputsInt[0][i][5],
-            GAIndividualInputsInt[0][i][6],
-            GAIndividualInputsInt[0][i][7],
-            GAIndividualInputsFloat[0][i][0],
-            GAIndividualInputsFloat[0][i][1]);*/
     }
     MeasureFitness(0);
 }
@@ -163,30 +186,33 @@ public void CalculateFitness(int individual)
 {
     float playerPos[3];
     GetEntPropVector(simClient, Prop_Data, "m_vecAbsOrigin", playerPos);
+    // FIXME: closest point on line not working
     //float cP[3];
     //ClosestPoint(GAStartPos, GAEndPos, playerPos, cP);
     GAIndividualFitness[individual] =  GetVectorDistance(playerPos, GAEndPos);
     PrintToServer("Fitness of %d-%d: %f", curGen, individual, GAIndividualFitness[individual]);
+    
+    // save individual to file and stop generation if fitness low enough
     if(GAIndividualFitness[individual] < 50)
     {
-    	simulating = false;
-    	file = OpenFile("runs/GA", "w+");
-    	for(int i=0; i<simTicks; i++)
-    	{
-    		file.WriteLine("%d,%d,%d,%d,%d,%d,%d,%d,%f,%f", 
-    			GAIndividualInputsInt[i][individual][0],
-    			GAIndividualInputsInt[i][individual][1],
-    			GAIndividualInputsInt[i][individual][2],
-    			GAIndividualInputsInt[i][individual][3],
-    			GAIndividualInputsInt[i][individual][4],
-    			GAIndividualInputsInt[i][individual][5],
-    			GAIndividualInputsInt[i][individual][6],
-    			GAIndividualInputsInt[i][individual][7],
-    			GAIndividualInputsFloat[i][individual][0],
-    			GAIndividualInputsFloat[i][individual][1]);
-    	}
-    	file.Close();
-    }    	
+        simulating = false;
+        file = OpenFile("runs/GA", "w+");
+        for(int i=0; i<simTicks; i++)
+        {
+            file.WriteLine("%d,%d,%d,%d,%d,%d,%d,%d,%f,%f", 
+                GAIndividualInputsInt[i][individual][0],
+                GAIndividualInputsInt[i][individual][1],
+                GAIndividualInputsInt[i][individual][2],
+                GAIndividualInputsInt[i][individual][3],
+                GAIndividualInputsInt[i][individual][4],
+                GAIndividualInputsInt[i][individual][5],
+                GAIndividualInputsInt[i][individual][6],
+                GAIndividualInputsInt[i][individual][7],
+                GAIndividualInputsFloat[i][individual][0],
+                GAIndividualInputsFloat[i][individual][1]);
+        }
+        file.Close();
+    }        
 }
 
 public void MeasureFitness(int index)
@@ -201,7 +227,7 @@ public void MeasureFitness(int index)
         AcceptEntityInput(ent, "Kill");
     }
     
-    TeleportEntity(simClient, GAStartPos, GAStartAng, {0.000000, 0.000000, 0.000000});
+    TeleportEntity(simClient, GAStartPos, GAStartAng, {0.0, 0.0, 0.0});
     CreateTimer(1.5, MeasureTimer, index);
 }
 
@@ -275,27 +301,45 @@ public void Breed()
                 continue;
             
             // overwrite least fittest with children
-            for(int e=0; e<simTicks; e++)
+            for(int t=0; t<simTicks; t++)
             {            
                 // Get parts from both parents randomly
                 for(int a=0; a<8; a++)
                 {
                     int cross = GetRandomInt(0, 1);
-                    GAIndividualInputsInt[e][i][a] = GAIndividualInputsInt[e][parents[p][cross]][a];
+                    GAIndividualInputsInt[t][i][a] = GAIndividualInputsInt[t][parents[p][cross]][a];
                     // random mutations
-                    if(GetRandomInt(0, 100) > 95)
+                    if(GetRandomInt(0, 100) > 80)
                     {
-                        GAIndividualInputsInt[e][i][a] = GAIndividualInputsInt[e][i][a] == 1 ? 0 : 1;
+                        GAIndividualInputsInt[t][i][a] = GAIndividualInputsInt[t][i][a] == 1 ? 0 : 1;
+                    }
+                    // chance for inputs to be duplicated from previous tick
+                    if(t != 0)
+                    {
+                        if(GAIndividualInputsInt[t-1][i][a] == 1)
+                        {
+                            if(GetRandomInt(0, 100) > 20)
+                                GAIndividualInputsInt[t][i][a] = 1;
+                        }
                     }
                 }
                 for(int a=0; a<2; a++)
                 {
                     int cross = GetRandomInt(0, 1);
-                    GAIndividualInputsFloat[e][i][a] = GAIndividualInputsFloat[e][parents[p][cross]][a];
+                    GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t][parents[p][cross]][a];
                     // random mutations
                     if(GetRandomInt(0, 100) > 80)
                     {
-                        GAIndividualInputsFloat[e][i][a] += GetRandomFloat(-10, 10);
+                        GAIndividualInputsFloat[t][i][a] += GetRandomFloat(-20.0, 20.0);
+                    }
+                    // chance for inputs to be duplicated from previous tick
+                    if(t != 0)
+                    {
+                        if(GAIndividualInputsFloat[t-1][i][a] > 0 || GAIndividualInputsFloat[t-1][i][a] < 0)
+                        {
+                            if(GetRandomInt(0, 100) > 20)
+                                GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t-1][i][a];
+                        }
                     }
                 }
             }
@@ -419,7 +463,7 @@ public Action CmdPlayback(int client, int args)
                 else
                     startAngle[i-3] = StringToFloat(bu[i]);
             }
-            TeleportEntity(client, startPos, startAngle, {0.000000, 0.000000, 0.000000});
+            TeleportEntity(client, startPos, startAngle, {0.0, 0.0, 0.0});
             prevAngle[0] = startAngle[0];
             prevAngle[1] = startAngle[1];
         }
@@ -456,14 +500,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             if(simTick == simTicks)
             {
                 simulating = false;
-                GAIndividualMeasured[simIndex] = true;
+                // uncomment to prevent parents of new generations from being measured again (faster)
+                // disabled because runs don't seem deterministic (good fitness might just be a fluke)
+                //GAIndividualMeasured[simIndex] = true;
                 CalculateFitness(simIndex);
                 if(GAplayback)
                 {
-                	GAplayback = false;
-                	simulating = false;
-                	PrintToChat(simClient, "Simulation ended");
-                	return Plugin_Continue;
+                    GAplayback = false;
+                    simulating = false;
+                    PrintToChat(simClient, "Simulation ended");
+                    return Plugin_Continue;
                 }
                 simIndex++;
     
