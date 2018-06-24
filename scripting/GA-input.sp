@@ -5,6 +5,11 @@
 #include <sdktools>
 #include <files>
 #include <console>
+#include <tf2>
+#include <tf2_stocks>
+
+#undef REQUIRE_EXTENSIONS
+#include <botcontroller>
 
 public Plugin myinfo =
 {
@@ -16,10 +21,51 @@ public Plugin myinfo =
 };
 
 bool recording = false, playback = false, simulating = false;
-
+bool g_bBCExtension;
+int g_iBot = -1;
+int g_iBotTeam = 2;
+char g_hBotName[] = "GA-BOT";
 float startPos[3], startAngle[3];
 
 File file;
+
+public Action Timer_SetupBot(Handle hTimer)
+{
+    if (g_iBot != -1) {
+        return;
+    }
+    if (g_bBCExtension) {
+        g_iBot = BotController_CreateBot(g_hBotName);
+        
+        if (!IsClientInGame(g_iBot)) {
+            SetFailState("%t", "Cannot Create Bot");
+        }
+		ChangeClientTeam(g_iBot, g_iBotTeam);
+		TF2_SetPlayerClass(g_iBot, TFClass_Soldier);
+		ServerCommand("mp_waitingforplayers_cancel 1;");
+    } 
+    else 
+    {
+        SetFailState("%t", "No bot controller extension");
+    }
+}
+
+public void OnPluginEnd() {	
+	if (g_iBot != -1) {
+		KickClient(g_iBot, "%s", "Kicked GA-BOT");
+	}
+}
+
+public void OnLibraryAdded(const char[] sName) {
+    if (StrEqual(sName, "botcontroller")) 
+    {
+        g_bBCExtension = true;
+    } 
+}
+
+public void OnAllPluginsLoaded() {
+    g_bBCExtension = LibraryExists("botcontroller");
+}
 
 public void OnPluginStart()
 {
@@ -35,6 +81,8 @@ public void OnPluginStart()
     RegConsoleCmd("sm_loop", CmdLoop, "");
     RegConsoleCmd("sm_clear", CmdClear, "");
     RegConsoleCmd("sm_gaplay", CmdPlay, "");
+    CreateTimer(1.0, Timer_SetupBot);
+    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0");
 }
 
 float GAStartPos[3] = {-1338.432861, -547.227173, -2875.968750};
@@ -44,7 +92,6 @@ float GAEndPos[3] = {-1344.424927, 35.828671, -2619.968750};
 
 int populationSize = 12;
 int simTicks = 400;
-int simClient = 1;
 int simIndex = 0;
 int simTick = 0;
 int targetGen = 0;
@@ -70,7 +117,6 @@ public Action CmdGen(int client, int args)
 }
 public Action CmdSim(int client, int args)
 {
-    simClient = client;
     MeasureFitness(0);
 }
 public Action CmdBreed(int client, int args)
@@ -79,7 +125,8 @@ public Action CmdBreed(int client, int args)
 }
 public Action CmdLoop(int client, int args)
 {
-    simClient = client;
+    ServerCommand("host_timescale 10");
+    SetEntProp(g_iBot, Prop_Data, "m_takedamage", 1, 1); // Buddha
     if(args < 1)
     {
         PrintToChat(client, "Missing number of generations argument");
@@ -136,9 +183,9 @@ public void GeneratePopulation()
                 if(GetRandomInt(0, 100) > 90)
                 {
                     if(GAIndividualInputsInt[t][p] & PossibleButtons[i])
-                    	GAIndividualInputsInt[t][p] &= ~PossibleButtons[i];
-                	else
-                		GAIndividualInputsInt[t][p] |= PossibleButtons[i];
+                        GAIndividualInputsInt[t][p] &= ~PossibleButtons[i];
+                    else
+                        GAIndividualInputsInt[t][p] |= PossibleButtons[i];
                 }
                     
                 // chance for inputs to be duplicated from previous tick
@@ -191,7 +238,7 @@ public void GeneratePopulation()
 public void CalculateFitness(int individual)
 {
     float playerPos[3];
-    GetEntPropVector(simClient, Prop_Data, "m_vecAbsOrigin", playerPos);
+    GetEntPropVector(g_iBot, Prop_Data, "m_vecAbsOrigin", playerPos);
     // FIXME: closest point on line not working
     //float cP[3];
     //ClosestPoint(GAStartPos, GAEndPos, playerPos, cP);
@@ -226,7 +273,7 @@ public void MeasureFitness(int index)
         AcceptEntityInput(ent, "Kill");
     }
     
-    TeleportEntity(simClient, GAStartPos, GAStartAng, {0.0, 0.0, 0.0});
+    TeleportEntity(g_iBot, GAStartPos, GAStartAng, {0.0, 0.0, 0.0});
     CreateTimer(1.5, MeasureTimer, index);
 }
 
@@ -306,26 +353,26 @@ public void Breed()
                 {
                     int cross = GetRandomInt(0, 1);
                     if(GAIndividualInputsInt[t][parents[p][cross]] & PossibleButtons[a])
-                    	GAIndividualInputsInt[t][i] |= PossibleButtons[a];
-                	else
-                		GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
+                        GAIndividualInputsInt[t][i] |= PossibleButtons[a];
+                    else
+                        GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
                     // random mutations
                     if(GetRandomInt(0, 100) > 80)
                     {
                         if(GAIndividualInputsInt[t][i] & PossibleButtons[a])
-                        	GAIndividualInputsInt[t][i] |= PossibleButtons[a];
-                    	else
-                    		GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
+                            GAIndividualInputsInt[t][i] |= PossibleButtons[a];
+                        else
+                            GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
                     }
                     // chance for inputs to be duplicated from previous tick
                     if(t != 0)
-					{
-                        if(GetRandomInt(0, 100) > 20)
+                    {
+                        if(GetRandomInt(0, 100) > 50)
                         {
-	                        if(GAIndividualInputsInt[t-1][i] & PossibleButtons[a])
-								GAIndividualInputsInt[t][i] |= PossibleButtons[a];
-							else
-								GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
+                            if(GAIndividualInputsInt[t-1][i] & PossibleButtons[a])
+                                GAIndividualInputsInt[t][i] |= PossibleButtons[a];
+                            else
+                                GAIndividualInputsInt[t][i] &= ~PossibleButtons[a];
                         }
                     }
                 }
@@ -345,12 +392,12 @@ public void Breed()
                 }
                 for(int a=0; a<2; a++)
                 {
-	                // chance for inputs to be duplicated from previous tick
-	                if(t != 0)
-	                {
+                    // chance for inputs to be duplicated from previous tick
+                    if(t != 0)
+                    {
                         if(GetRandomInt(0, 100) > 20)
                             GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t-1][i][a];
-	                }
+                    }
                 }
 
             }
@@ -402,7 +449,6 @@ public Action CmdRecord(int client, int args)
     }
     file.WriteLine("%f,%f,%f,%f,%f", startPos[0], startPos[1], startPos[2], startAngle[0], startAngle[1]);
     
-    simClient = client;
     recording = true;
     playback = false;
     simulating = false;
@@ -485,7 +531,7 @@ public Action CmdPlayback(int client, int args)
             return;
         }
     }
-    simClient = client;
+
     recording = false;
     playback = true;
     simulating = false;
@@ -506,20 +552,20 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
     if(simulating)
     {
-        if(client == simClient)
+        if(client == g_iBot)
         {
             if(simTick == simTicks)
             {
                 simulating = false;
                 // uncomment to prevent parents of new generations from being measured again (faster)
                 // disabled because runs don't seem deterministic (good fitness might just be a fluke)
-                //GAIndividualMeasured[simIndex] = true;
+                GAIndividualMeasured[simIndex] = true;
                 CalculateFitness(simIndex);
                 if(GAplayback)
                 {
                     GAplayback = false;
                     simulating = false;
-                    PrintToChat(simClient, "Simulation ended");
+                    PrintToChatAll("Simulation ended");
                     return Plugin_Continue;
                 }
                 simIndex++;
@@ -531,7 +577,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 else
                 {
                     if(targetGen > curGen)
-                        Breed();
+                    {
+                    	Breed();
+                    }                        
+                    else
+                    {
+                    	PrintToServer("Finished loop");
+                    	ServerCommand("host_timescale 10");
+                    }
                 }
                 
                 return Plugin_Continue;
@@ -585,14 +638,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     }
     if(recording)
     {
-        if(client != simClient)
+        if(client != g_iBot)
             return Plugin_Continue;
             
         file.WriteLine("%d,%f,%f", buttons, angles[0], angles[1]);
     }
     else if(playback)
     {
-        if(client != simClient)
+        if(client != g_iBot)
             return Plugin_Continue;
             
         if(file.EndOfFile())
