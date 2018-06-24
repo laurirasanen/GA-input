@@ -15,7 +15,7 @@ public Plugin myinfo =
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
-bool recording = false, playback = false;
+bool recording = false, playback = false, simulating = false;
 
 float startPos[3], startAngle[3], prevAngle[3];
 
@@ -28,10 +28,292 @@ public void OnPluginStart()
     
     RegConsoleCmd("sm_playback", CmdPlayback, "");
     RegConsoleCmd("sm_stopplayback", CmdStopPlayback, "");
+    
+    RegConsoleCmd("sm_gen", CmdGen, "");
+    RegConsoleCmd("sm_sim", CmdSim, "");
+    RegConsoleCmd("sm_breed", CmdBreed, "");
+    RegConsoleCmd("sm_loop", CmdLoop, "");
+    RegConsoleCmd("sm_clear", CmdClear, "");
+    RegConsoleCmd("sm_gaplay", CmdPlay, "");
+}
+
+float GAStartPos[3] = {-1338.432861, -547.227173, -2875.968750};
+float GAStartAng[3] = {0.000000, 90.000000, 0.000000};
+float GAEndPos[3] = {-1344.424927, 35.828671, -2619.968750};
+//float GAEndAng[3] = {0.000000, 90.000000, 0.000000};
+
+int populationSize = 12;
+int simTicks = 400;
+int simClient = 1;
+int simIndex = 0;
+int simTick = 0;
+int targetGen = 0;
+int curGen = 0;
+
+int GAIndividualInputsInt[400][12][8];
+float GAIndividualInputsFloat[400][12][2];
+float GAIndividualFitness[12];
+bool GAIndividualMeasured[12];
+bool population = false;
+bool GAplayback = false;
+
+public Action CmdClear(int client, int args)
+{
+    population = false;
+    targetGen = 0;
+    curGen = 0;
+}
+public Action CmdGen(int client, int args)
+{
+    GeneratePopulation();
+}
+public Action CmdSim(int client, int args)
+{
+    simClient = client;
+    MeasureFitness(0);
+}
+public Action CmdBreed(int client, int args)
+{
+    Breed();
+}
+public Action CmdLoop(int client, int args)
+{
+    simClient = client;
+    if(args < 1)
+    {
+        PrintToChat(client, "Missing number of generations argument");
+        return;
+    }
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    int gen = 0;
+    if(StringToIntEx(arg, gen))
+    {
+        targetGen += gen;
+        if(!population)
+        {
+        	GeneratePopulation();
+        	return;
+        }          
+        
+    	if(targetGen > curGen)
+            Breed();
+    }        
+    else
+        PrintToChat(client, "Couldn't parse number");
+}
+public Action CmdPlay(int client, int args)
+{
+    if(args < 1)
+    {
+        PrintToChat(client, "Missing number argument");
+        return;
+    }
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    int index = 0;
+    if(StringToIntEx(arg, index))
+    {
+		simIndex = index;
+		GAplayback = true;
+		MeasureFitness(index);
+		PrintToChat(client, "Simulating %d-%d", curGen, index);
+    }        
+    else
+        PrintToChat(client, "Couldn't parse number");
+}
+
+public void GeneratePopulation()
+{
+    for(int t=0; t<simTicks; t++)
+    {
+        for(int p=0; p < populationSize; p++)
+        {
+            for(int i=0; i<8; i++)
+            {
+                GAIndividualInputsInt[t][p][i] = GetRandomInt(0, 1);
+            }
+            GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-10, 10);
+            GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-10, 10);
+        }
+    }
+    PrintToServer("Population generated!");
+    population = true;
+    curGen = 0;
+    //PrintToServer("First input of each individual:");
+    for(int i=0;i<populationSize; i++)
+    {
+        GAIndividualMeasured[i] = false;
+        /*PrintToServer("%d, %d, %d, %d, %d, %d, %d, %d, %f, %f",
+            GAIndividualInputsInt[0][i][0],
+            GAIndividualInputsInt[0][i][1],
+            GAIndividualInputsInt[0][i][2],
+            GAIndividualInputsInt[0][i][3],
+            GAIndividualInputsInt[0][i][4],
+            GAIndividualInputsInt[0][i][5],
+            GAIndividualInputsInt[0][i][6],
+            GAIndividualInputsInt[0][i][7],
+            GAIndividualInputsFloat[0][i][0],
+            GAIndividualInputsFloat[0][i][1]);*/
+    }
+    MeasureFitness(0);
+}
+
+public void CalculateFitness(int individual)
+{
+    float playerPos[3];
+    GetEntPropVector(simClient, Prop_Data, "m_vecAbsOrigin", playerPos);
+    //float cP[3];
+    //ClosestPoint(GAStartPos, GAEndPos, playerPos, cP);
+    GAIndividualFitness[individual] =  GetVectorDistance(playerPos, GAEndPos);
+    PrintToServer("Fitness of %d-%d: %f", curGen, individual, GAIndividualFitness[individual]);
+    if(GAIndividualFitness[individual] < 50)
+    {
+    	simulating = false;
+    	file = OpenFile("runs/GA", "w+");
+    	for(int i=0; i<simTicks; i++)
+    	{
+    		file.WriteLine("%d,%d,%d,%d,%d,%d,%d,%d,%f,%f", 
+    			GAIndividualInputsInt[i][individual][0],
+    			GAIndividualInputsInt[i][individual][1],
+    			GAIndividualInputsInt[i][individual][2],
+    			GAIndividualInputsInt[i][individual][3],
+    			GAIndividualInputsInt[i][individual][4],
+    			GAIndividualInputsInt[i][individual][5],
+    			GAIndividualInputsInt[i][individual][6],
+    			GAIndividualInputsInt[i][individual][7],
+    			GAIndividualInputsFloat[i][individual][0],
+    			GAIndividualInputsFloat[i][individual][1]);
+    	}
+    	file.Close();
+    }    	
+}
+
+public void MeasureFitness(int index)
+{
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, "tf_projectile_pipe_remote")) != -1)
+    {
+        AcceptEntityInput(ent, "Kill");
+    }
+    while ((ent = FindEntityByClassname(ent, "tf_projectile_rocket")) != -1)
+    {
+        AcceptEntityInput(ent, "Kill");
+    }
+    
+    TeleportEntity(simClient, GAStartPos, GAStartAng, {0.000000, 0.000000, 0.000000});
+    CreateTimer(1.5, MeasureTimer, index);
+}
+
+public Action MeasureTimer(Handle timer, int index)
+{
+    prevAngle = GAStartAng;
+    simIndex = index;
+    simTick = 0;
+    simulating = true;
+}
+
+public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
+{
+    float d[3];
+    MakeVectorFromPoints(A, B, d);
+    NormalizeVector(d, d);
+    
+    float w[3];
+    MakeVectorFromPoints(A, P, w);
+    ScaleVector(d, GetVectorDotProduct(w, d));
+    ref = d;
+}
+
+public void Breed()
+{
+    int fittest[6];
+    float order[12];
+    for(int i=0; i<populationSize;i++)
+        order[i] = GAIndividualFitness[i];
+
+    SortFloats(order, populationSize, Sort_Ascending);
+    for(int i=0; i<populationSize/2; i++)
+    {
+        for(int e=0; e<populationSize; e++)
+        {
+            if(order[i] == GAIndividualFitness[e])
+                fittest[i] = e;
+        }
+    }
+    
+    // pair fittest randomly
+    int parents[3][2];
+    bool taken[6];
+    int par = 0;
+    for(int i=0; i<populationSize/2; i++)
+    {
+        if(!taken[i])
+        {
+            int rand = GetRandomInt(0, (populationSize/2) - 1);
+            while(taken[rand] || rand == i)
+                rand = GetRandomInt(0, (populationSize/2) - 1);
+            
+            parents[par][0] = i;
+            parents[par][1] = rand;
+            taken[i] = true;
+            taken[rand] = true;
+            par++;
+        }
+    }
+    for(int p=0; p<populationSize/4; p++)
+    {
+        for(int i=0; i<populationSize; i++)
+        {
+            bool cont = false;
+            for(int e=0; e<populationSize/2; e++)
+            {
+                if(fittest[e] == i)
+                    cont = true;
+            }
+            if(cont)
+                continue;
+            
+            // overwrite least fittest with children
+            for(int e=0; e<simTicks; e++)
+            {            
+                // Get parts from both parents randomly
+                for(int a=0; a<8; a++)
+                {
+                    int cross = GetRandomInt(0, 1);
+                    GAIndividualInputsInt[e][i][a] = GAIndividualInputsInt[e][parents[p][cross]][a];
+                    // random mutations
+                    if(GetRandomInt(0, 100) > 95)
+                    {
+                        GAIndividualInputsInt[e][i][a] = GAIndividualInputsInt[e][i][a] == 1 ? 0 : 1;
+                    }
+                }
+                for(int a=0; a<2; a++)
+                {
+                    int cross = GetRandomInt(0, 1);
+                    GAIndividualInputsFloat[e][i][a] = GAIndividualInputsFloat[e][parents[p][cross]][a];
+                    // random mutations
+                    if(GetRandomInt(0, 100) > 80)
+                    {
+                        GAIndividualInputsFloat[e][i][a] += GetRandomFloat(-10, 10);
+                    }
+                }
+            }
+            GAIndividualMeasured[i] = false;
+        }
+    }
+    curGen++;
+    PrintToServer("Generation %d breeded!", curGen);    
+    MeasureFitness(0);      
 }
 
 public Action CmdRecord(int client, int args)
 {
+    if(recording)
+    {
+        PrintToChat(client, "Already recording!");
+        return;
+    }
     if(args < 1)
     {
         PrintToChat(client, "Missing name argument");
@@ -137,7 +419,7 @@ public Action CmdPlayback(int client, int args)
                 else
                     startAngle[i-3] = StringToFloat(bu[i]);
             }
-            TeleportEntity(client, startPos, startAngle, NULL_VECTOR);
+            TeleportEntity(client, startPos, startAngle, {0.000000, 0.000000, 0.000000});
             prevAngle[0] = startAngle[0];
             prevAngle[1] = startAngle[1];
         }
@@ -167,6 +449,110 @@ public Action CmdStopPlayback(int client, int args)
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
+    if(simulating)
+    {
+        if(client == simClient)
+        {
+            if(simTick == simTicks)
+            {
+                simulating = false;
+                GAIndividualMeasured[simIndex] = true;
+                CalculateFitness(simIndex);
+                if(GAplayback)
+                {
+                	GAplayback = false;
+                	simulating = false;
+                	PrintToChat(simClient, "Simulation ended");
+                	return Plugin_Continue;
+                }
+                simIndex++;
+    
+                if(simIndex < populationSize)
+                {
+                    MeasureFitness(simIndex);
+                }
+                else
+                {
+                    if(targetGen > curGen)
+                        Breed();
+                }
+                
+                return Plugin_Continue;
+            }
+            if(GAIndividualMeasured[simIndex] && !GAplayback)
+            {
+                PrintToServer("Fitness of %d-%d: %f (parent)", curGen, simIndex, GAIndividualFitness[simIndex]);
+                simIndex++;
+    
+                if(simIndex == populationSize)
+                {
+                    simulating = false;
+                    if(targetGen > curGen)
+                        Breed();                 
+                }
+                
+                return Plugin_Continue;
+            }
+            buttons = 0;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][0] == 1)
+                buttons |= IN_ATTACK;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][1] == 1)
+                buttons |= IN_ATTACK2;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][2] == 1)
+                buttons |= IN_JUMP;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][3] == 1)
+                buttons |= IN_DUCK;
+    
+            if(GAIndividualInputsInt[simTick][simIndex][4] == 1)
+                buttons |= IN_FORWARD;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][5] == 1)
+                buttons |= IN_BACK;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][6] == 1)
+                buttons |= IN_MOVELEFT;
+            
+            if(GAIndividualInputsInt[simTick][simIndex][7] == 1)
+                buttons |= IN_MOVERIGHT;
+            
+            buttons |= IN_RELOAD; // Autoreload
+                
+            if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
+                vel[0] = 0.0;
+            else if (buttons & IN_FORWARD)
+                vel[0] = 280.0;
+            else if (buttons & IN_BACK)
+                vel[0] = -280.0;
+            
+            if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
+                vel[1] = 0.0;
+            else if (buttons & IN_MOVELEFT)
+                vel[1] = -280.0;
+            else if (buttons & IN_MOVERIGHT)
+                vel[1] = 280.0;
+                
+            prevAngle[0] += GAIndividualInputsInt[simTick][simIndex][0];
+            prevAngle[1] += GAIndividualInputsInt[simTick][simIndex][1];
+            if(prevAngle[0] > 89.000000)
+                prevAngle[0] = 89.000000;
+            else if(prevAngle[0] < -89.000000)
+                prevAngle[0] = -89.000000;
+            if(prevAngle[1] > 180.000000)
+                prevAngle[1] -= 360.000000;
+            else if(prevAngle[1] < -180.000000)
+                prevAngle[1] += 360.000000;
+            TeleportEntity(client, NULL_VECTOR, prevAngle, NULL_VECTOR);
+            
+            simTick++;
+            
+            return Plugin_Changed;
+        }
+        
+    }
     if(file == INVALID_HANDLE)
     {
         return Plugin_Continue;
@@ -281,14 +667,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 
                 prevAngle[0] += StringToFloat(bu[sizeof(bu)-2]);
                 prevAngle[1] += StringToFloat(bu[sizeof(bu)-1]);
-                if(prevAngle[0] > 89)
-                    prevAngle[0] = 89;
-                else if(prevAngle[0] < -89)
-                    prevAngle[0] = -89;
-                if(prevAngle[1] > 180)
-                    prevAngle[1] -= 360;
-                else if(prevAngle[1] < -180)
-                    prevAngle[1] += 360;
+                if(prevAngle[0] > 89.000000)
+                    prevAngle[0] = 89.000000;
+                else if(prevAngle[0] < -89.000000)
+                    prevAngle[0] = -89.000000;
+                if(prevAngle[1] > 180.000000)
+                    prevAngle[1] -= 360.000000;
+                else if(prevAngle[1] < -180.000000)
+                    prevAngle[1] += 360.000000;
                 TeleportEntity(client, NULL_VECTOR, prevAngle, NULL_VECTOR);
 
                 return Plugin_Changed;
