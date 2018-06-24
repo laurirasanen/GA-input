@@ -17,7 +17,7 @@ public Plugin myinfo =
 
 bool recording = false, playback = false, simulating = false;
 
-float startPos[3], startAngle[3], prevAngle[3];
+float startPos[3], startAngle[3];
 
 File file;
 
@@ -153,11 +153,13 @@ public void GeneratePopulation()
                     }
                 }
             }
+            GAIndividualInputsFloat[t][p][0] = GAStartAng[0];
+            GAIndividualInputsFloat[t][p][1] = GAStartAng[1];
             // random mouse movement
-            if(GetRandomInt(0,100) > 80)
+            if(GetRandomInt(0,100) > 95)
             {
-                GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-10.0, 10.0);
-                GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-10.0, 10.0);
+                GAIndividualInputsFloat[t][p][0] = GetRandomFloat(-89.0, 89.0);
+                GAIndividualInputsFloat[t][p][1] = GetRandomFloat(-180.0, 180.0);
             }
             
             // chance for inputs to be duplicated from previous tick
@@ -230,7 +232,6 @@ public void MeasureFitness(int index)
 
 public Action MeasureTimer(Handle timer, int index)
 {
-    prevAngle = GAStartAng;
     simIndex = index;
     simTick = 0;
     simulating = true;
@@ -332,21 +333,26 @@ public void Breed()
                 {
                     int cross = GetRandomInt(0, 1);
                     GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t][parents[p][cross]][a];
-                    // random mutations
-                    if(GetRandomInt(0, 100) > 80)
-                    {
-                        GAIndividualInputsFloat[t][i][a] += GetRandomFloat(-10.0, 10.0);
-                    }
-                    // chance for inputs to be duplicated from previous tick
-                    /*if(t != 0)
-                    {
-                        if(GAIndividualInputsFloat[t-1][i][a] > 0 || GAIndividualInputsFloat[t-1][i][a] < 0)
-                        {
-                            if(GetRandomInt(0, 100) > 20)
-                                GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t-1][i][a];
-                        }
-                    }*/
                 }
+                // random mutations
+                if(GetRandomInt(0, 100) > 80)
+                {
+                    GAIndividualInputsFloat[t][i][0] = GetRandomFloat(-89.0, 89.0);
+                }
+                if(GetRandomInt(0, 100) > 80)
+                {
+                    GAIndividualInputsFloat[t][i][1] = GetRandomFloat(-180.0, 180.0);
+                }
+                for(int a=0; a<2; a++)
+                {
+	                // chance for inputs to be duplicated from previous tick
+	                if(t != 0)
+	                {
+                        if(GetRandomInt(0, 100) > 20)
+                            GAIndividualInputsFloat[t][i][a] = GAIndividualInputsFloat[t-1][i][a];
+	                }
+                }
+
             }
             GAIndividualMeasured[i] = false;
         }
@@ -386,8 +392,6 @@ public Action CmdRecord(int client, int args)
     
     GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", startPos);
     GetClientEyeAngles(client, startAngle);
-    prevAngle[0] = startAngle[0];
-    prevAngle[1] = startAngle[1];
     
     file = OpenFile(path, "w+");
     if(file == INVALID_HANDLE)
@@ -472,8 +476,6 @@ public Action CmdPlayback(int client, int args)
                     startAngle[i-3] = StringToFloat(bu[i]);
             }
             TeleportEntity(client, startPos, startAngle, {0.0, 0.0, 0.0});
-            prevAngle[0] = startAngle[0];
-            prevAngle[1] = startAngle[1];
         }
         else
         {
@@ -548,6 +550,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 
                 return Plugin_Continue;
             }
+            float fAng[3];
+            fAng[0] = GAIndividualInputsFloat[simTick][simIndex][0];
+            fAng[1] = GAIndividualInputsFloat[simTick][simIndex][1];
+            TeleportEntity(client, NULL_VECTOR, fAng, NULL_VECTOR);
+            
             buttons = GAIndividualInputsInt[simTick][simIndex];
             
             buttons |= IN_RELOAD; // Autoreload
@@ -555,28 +562,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
                 vel[0] = 0.0;
             else if (buttons & IN_FORWARD)
-                vel[0] = 280.0;
+                vel[0] = 400.0;
             else if (buttons & IN_BACK)
-                vel[0] = -280.0;
+                vel[0] = -400.0;
             
             if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
                 vel[1] = 0.0;
             else if (buttons & IN_MOVELEFT)
-                vel[1] = -280.0;
+                vel[1] = -400.0;
             else if (buttons & IN_MOVERIGHT)
-                vel[1] = 280.0;
-                
-            prevAngle[0] += GAIndividualInputsFloat[simTick][simIndex][0];
-            prevAngle[1] += GAIndividualInputsFloat[simTick][simIndex][1];
-            if(prevAngle[0] > 89.000000)
-                prevAngle[0] = 89.000000;
-            else if(prevAngle[0] < -89.000000)
-                prevAngle[0] = -89.000000;
-            if(prevAngle[1] > 180.000000)
-                prevAngle[1] -= 360.000000;
-            else if(prevAngle[1] < -180.000000)
-                prevAngle[1] += 360.000000;
-            TeleportEntity(client, NULL_VECTOR, prevAngle, NULL_VECTOR);
+                vel[1] = 400.0;
             
             simTick++;
             
@@ -592,22 +587,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     {
         if(client != simClient)
             return Plugin_Continue;
-
-        float dAng[2];
-        dAng[0] = angles[0] - prevAngle[0];
-        dAng[1] = angles[1] - prevAngle[1];
-        
-        if(dAng[1] > 180)
-            dAng[1] -= 360;
-        else if(dAng[1] < -180)
-            dAng[1] += 360;
-        
-        file.WriteLine("%d,%f,%f", buttons, dAng[0], dAng[1]);
-        
-        for(int i = 0; i < 2; i++)
-        {
-            prevAngle[i] = angles[i];
-        }
+            
+        file.WriteLine("%d,%f,%f", buttons, angles[0], angles[1]);
     }
     else if(playback)
     {
@@ -628,6 +609,12 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             int n = ExplodeString(buffer, ",", butt, 3, 8);
             if(n == 3)
             {
+                float fAng[3];
+                fAng[0] = StringToFloat(butt[1]);
+                fAng[1] = StringToFloat(butt[2]);
+
+                TeleportEntity(client, NULL_VECTOR, fAng, NULL_VECTOR);
+                
                 buttons = StringToInt(butt[0]);
                         
                 buttons |= IN_RELOAD; // Autoreload
@@ -635,28 +622,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
                     vel[0] = 0.0;
                 else if (buttons & IN_FORWARD)
-                    vel[0] = 280.0;
+                    vel[0] = 400.0;
                 else if (buttons & IN_BACK)
-                    vel[0] = -280.0;
+                    vel[0] = -400.0;
                 
                 if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
                     vel[1] = 0.0;
                 else if (buttons & IN_MOVELEFT)
-                    vel[1] = -280.0;
+                    vel[1] = -400.0;
                 else if (buttons & IN_MOVERIGHT)
-                    vel[1] = 280.0;
-                
-                prevAngle[0] += StringToFloat(butt[1]);
-                prevAngle[1] += StringToFloat(butt[2]);
-                if(prevAngle[0] > 89.0)
-                    prevAngle[0] = 89.0;
-                else if(prevAngle[0] < -89.0)
-                    prevAngle[0] = -89.0;
-                if(prevAngle[1] > 180.0)
-                    prevAngle[1] -= 360.0;
-                else if(prevAngle[1] < -180.0)
-                    prevAngle[1] += 360.0;
-                TeleportEntity(client, NULL_VECTOR, prevAngle, NULL_VECTOR);
+                    vel[1] = 400.0;
 
                 return Plugin_Changed;
             }
