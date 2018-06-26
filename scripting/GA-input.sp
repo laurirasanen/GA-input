@@ -35,8 +35,8 @@ int g_iTargetGen;
 int g_iCurrentGen;
 int g_iGAIndividualInputsInt[MAXFRAMES][12];
 int g_iFrames;
-int g_iTimeScale;
 
+float g_fTimeScale = 1.0;
 float g_fStartPos[3];
 float g_fStartAng[3];
 float g_fGAIndividualInputsFloat[MAXFRAMES][12][2];
@@ -64,14 +64,14 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
     // testing cmds
-    RegConsoleCmd("sm_record", CmdRecord, "");
-    RegConsoleCmd("sm_stoprecord", CmdStopRecord, "");
-    RegConsoleCmd("sm_playback", CmdPlayback, "");
-    RegConsoleCmd("sm_stopplayback", CmdStopPlayback, "");
+    RegConsoleCmd("ga_record", CmdRecord, "");
+    RegConsoleCmd("ga_stoprecord", CmdStopRecord, "");
+    RegConsoleCmd("ga_playback", CmdPlayback, "");
+    RegConsoleCmd("ga_stopplayback", CmdStopPlayback, "");
     
     // config
-    RegConsoleCmd("ga_save", CmdSave, "");
-    RegConsoleCmd("ga_load", CmdLoad, "");
+    RegConsoleCmd("ga_savecfg", CmdSave, "");
+    RegConsoleCmd("ga_loadcfg", CmdLoad, "");
     RegConsoleCmd("ga_start", CmdStart, "");
     RegConsoleCmd("ga_end", CmdEnd, "");
     RegConsoleCmd("ga_addcp", CmdAddCheckpoint, "");
@@ -86,6 +86,8 @@ public void OnPluginStart()
     RegConsoleCmd("ga_loop", CmdLoop, "");
     RegConsoleCmd("ga_stoploop", CmdStopLoop, "");
     RegConsoleCmd("ga_clear", CmdClear, "");
+    RegConsoleCmd("ga_savegen", CmdSaveGen, "");
+    RegConsoleCmd("ga_loadgen", CmdLoadGen, "");
     
     // debug
     RegConsoleCmd("ga_debug", CmdDebug, "");
@@ -99,6 +101,14 @@ public void OnPluginStart()
     
     CreateTimer(1.0, Timer_SetupBot);
     ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0");
+    if(!FileExists("/GA/"))
+        CreateDirectory("/GA/", 557);
+    if(!FileExists("/GA/rec/"))
+        CreateDirectory("/GA/rec/", 557);
+    if(!FileExists("/GA/gen/"))
+        CreateDirectory("/GA/gen/", 557);
+    if(!FileExists("/GA/cfg/"))
+        CreateDirectory("/GA/cfg/", 557);
 }
 
 public void OnPluginEnd() {    
@@ -300,14 +310,14 @@ public Action CmdRecord(int client, int args)
     }
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/runs/";
+    char path[64] = "/GA/rec/";
     StrCat(path, sizeof(path), arg);
     
     int e=0;
     while(FileExists(path))
     {
         e++;
-        path = "/runs/";
+        path = "GA/rec/";
         StrCat(path, sizeof(path), arg);
         char num[8];
         IntToString(e, num, sizeof(num));
@@ -441,6 +451,115 @@ public Action CmdDebug(int client, int args)
     return Plugin_Handled;
 }
 
+public Action CmdSaveGen(int client, int args)
+{
+    if(args < 1)
+    {
+        CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    char path[64] = "/GA/gen/";
+    StrCat(path, sizeof(path), arg);
+    
+    int e=0;
+    while(FileExists(path))
+    {
+        e++;
+        path = "/GA/gen/";
+        StrCat(path, sizeof(path), arg);
+        char num[8];
+        IntToString(e, num, sizeof(num));
+        StrCat(path, sizeof(path), num);
+    }
+    char tPath[64];
+    strcopy(tPath, sizeof(tPath), path);
+    for(int i=0; i < g_iPopulationSize; i++)
+    {
+        path = tPath;
+        char suff[8] = "-";
+        char numb[8];
+        IntToString(i, numb, sizeof(numb));
+        StrCat(suff, sizeof(suff), numb);
+        StrCat(path, sizeof(path), suff);
+        g_hFile = OpenFile(path, "w+");
+        if(g_hFile == INVALID_HANDLE)
+        {
+            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+            return Plugin_Handled;
+        }
+        for(int f=0; f < g_iFrames; f++)
+        {
+            g_hFile.WriteLine("%d,%f,%f", g_iGAIndividualInputsInt[f][i], g_fGAIndividualInputsFloat[f][i][0], g_fGAIndividualInputsFloat[f][i][1]);
+        }
+        
+        g_hFile.Close();    
+    }
+    
+    CPrintToChat(client, "%s Saved generation to %s", g_cPrintPrefix, tPath);
+    return Plugin_Handled;
+}
+
+public Action CmdLoadGen(int client, int args)
+{
+    if(args < 1)
+    {
+        CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    char path[64] = "/GA/gen/";
+    StrCat(path, sizeof(path), arg);
+    char tPath[64];
+    strcopy(tPath, sizeof(tPath), path);
+    for(int i=0; i < g_iPopulationSize; i++)
+    {
+        path = tPath;
+        char suff[8] = "-";
+        char numb[8];
+        IntToString(i, numb, sizeof(numb));
+        StrCat(suff, sizeof(suff), numb);
+        StrCat(path, sizeof(path), suff);
+        g_hFile = OpenFile(path, "r");
+        if(g_hFile == INVALID_HANDLE)
+        {
+            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+            return Plugin_Handled;
+        }
+        int f;
+        g_hFile.Seek(0, SEEK_SET);
+        char buffer[128];
+        while(g_hFile.ReadLine(buffer, sizeof(buffer)))
+        {
+            char bu[3][16];
+            int n = ExplodeString(buffer, ",", bu, 3, 16);
+            
+            if(n == 3)
+            {
+                g_iGAIndividualInputsInt[f][i] = StringToInt(bu[0]);
+                g_fGAIndividualInputsFloat[f][i][0] = StringToFloat(bu[1]);
+                g_fGAIndividualInputsFloat[f][i][1] = StringToFloat(bu[2]);
+            }
+            else
+            {
+                CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+                g_bPlayback = false;
+                g_hFile.Close();
+                return Plugin_Handled;
+            }
+            f++;
+        }
+        g_hFile.Close();    
+    }
+    g_bPopulation = true;
+    CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
+    return Plugin_Handled;
+}
+
 public Action CmdSave(int client, int args)
 {
     if(args < 1)
@@ -450,14 +569,14 @@ public Action CmdSave(int client, int args)
     }
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/GA/";
+    char path[64] = "/GA/cfg/";
     StrCat(path, sizeof(path), arg);
     
     int e=0;
     while(FileExists(path))
     {
         e++;
-        path = "/GA/";
+        path = "/GA/cfg/";
         StrCat(path, sizeof(path), arg);
         char num[8];
         IntToString(e, num, sizeof(num));
@@ -468,7 +587,7 @@ public Action CmdSave(int client, int args)
     if(g_hFile == INVALID_HANDLE)
     {
         CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-        PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
+        PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
     g_hFile.WriteLine("%d", g_iFrames);
@@ -491,7 +610,7 @@ public Action CmdLoad(int client, int args)
         return Plugin_Handled;
     }
     
-    char arg[64], target[64] = "/GA/";
+    char arg[64], target[64] = "/GA/cfg/";
     GetCmdArg(1, arg, sizeof(arg));
     StrCat(target, sizeof(target), arg);
     
@@ -501,13 +620,13 @@ public Action CmdLoad(int client, int args)
     }
     else
     {
-        CPrintToChat(client, "%s Can't find g_hFile %s.", g_cPrintPrefix, arg);
+        CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
         return Plugin_Handled;
     }
     if(g_hFile == INVALID_HANDLE)
     {
         CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-        PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
+        PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
     g_hFile.Seek(0, SEEK_SET);
@@ -601,14 +720,14 @@ public Action CmdSetTimeScale(int client, int args)
     }
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    int num;
-    if(!StringToIntEx(arg, num))
+    float num;
+    if(!StringToFloatEx(arg, num))
     {
         CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
         return Plugin_Handled;
     }
-    g_iTimeScale = num;
-    CPrintToChat(client, "%s Loop timescale set to %d", g_cPrintPrefix, num);
+    g_fTimeScale = num;
+    CPrintToChat(client, "%s Loop timescale set to %f", g_cPrintPrefix, num);
     return Plugin_Handled;
 }
 
@@ -724,6 +843,7 @@ public Action CmdClear(int client, int args)
     g_bPopulation = false;
     g_iTargetGen = 0;
     g_iCurrentGen = 0;
+    CPrintToChat(client, "%s Cleared generation!", g_cPrintPrefix);
     return Plugin_Handled;
 }
 
@@ -753,7 +873,7 @@ public Action CmdStopLoop(int client, int args)
 
 public Action CmdLoop(int client, int args)
 {
-    ServerCommand("host_timescale %d", g_iTimeScale);
+    ServerCommand("host_timescale %f", g_fTimeScale);
     SetEntProp(g_iBot, Prop_Data, "m_takedamage", 1, 1); // Buddha
     if(args < 1)
     {
@@ -1019,7 +1139,7 @@ public void CalculateFitness(int individual)
         }
     }
     
-    PrintToServer("%s lastCP: %d", g_cPrintPrefixNoColor, lastCP);
+    //PrintToServer("%s lastCP: %d", g_cPrintPrefixNoColor, lastCP);
     
     float dist;
     
@@ -1038,20 +1158,22 @@ public void CalculateFitness(int individual)
     else
         dist += GetVectorDistance(g_fGACheckPoints[lastCP], cP);
         
-    // hasn't made it past start point, set distance to start as negative fitness
-    if(dist <= 0)
-        dist -= GetVectorDistance(g_fGAStartPos, playerPos);
+    // subtract distance from line
+    dist -= GetVectorDistance(cP, playerPos);
         
     g_fGAIndividualFitness[individual] = dist;
     PrintToServer("%s Fitness of %d-%d: %f", g_cPrintPrefixNoColor, g_iCurrentGen, individual, g_fGAIndividualFitness[individual]);
-    
-    int ent = DrawLaser(playerPos, cP, 255, 0, 0);
-    CreateTimer(5.0, Timer_KillEnt, ent);
+    if(g_bDraw)
+    {
+        int ent = DrawLaser(playerPos, cP, 255, 0, 0);
+        CreateTimer(5.0, Timer_KillEnt, ent);
+    }
+
     // save individual to file and stop generation if fitness low enough
     /*if(GAIndividualFitness[individual] < 50)
     {
         simulating = false;
-        file = OpenFile("runs/GA", "w+");
+        file = OpenFile("/GA/", "w+");
         for(int i=0; i<simFrames; i++)
         {
             file.WriteLine("%d,%f,%f", 
