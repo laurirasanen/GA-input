@@ -298,15 +298,20 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 public Action CmdRecord(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     if(g_bRecording)
     {
         CPrintToChat(client, "%s Already recording!", g_cPrintPrefix);
-        return;
+        return Plugin_Handled;
     }
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
-        return;
+        return Plugin_Handled;
     }
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
@@ -332,7 +337,7 @@ public Action CmdRecord(int client, int args)
     {
         CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
         PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
-        return;
+        return Plugin_Handled;
     }
     g_hFile.WriteLine("%f,%f,%f,%f,%f", g_fStartPos[0], g_fStartPos[1], g_fStartPos[2], g_fStartAng[0], g_fStartAng[1]);
     
@@ -340,14 +345,20 @@ public Action CmdRecord(int client, int args)
     g_bPlayback = false;
     g_bSimulating = false;
     CPrintToChat(client, "%s Recording started!", g_cPrintPrefix);
+    return Plugin_Handled;
 }
 
 public Action CmdStopRecord(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     if(!g_bRecording)
     {
         CPrintToChat(client, "%s Not recording!", g_cPrintPrefix);
-        return;
+        return Plugin_Handled;
     }
     if(g_hFile != INVALID_HANDLE)
         g_hFile.Close();
@@ -355,14 +366,20 @@ public Action CmdStopRecord(int client, int args)
     g_bPlayback = false;
     g_bSimulating = false;
     CPrintToChat(client, "%s Recording stopped!", g_cPrintPrefix);
+    return Plugin_Handled;
 }
 
 public Action CmdPlayback(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
-        return;
+        return Plugin_Handled;
     }
     
     char arg[64], target[64] = "runs/";
@@ -375,14 +392,14 @@ public Action CmdPlayback(int client, int args)
     }
     else
     {
-        CPrintToChat(client, "%s Can't find g_hFile %s.", g_cPrintPrefix, arg);
-        return;
+        CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
+        return Plugin_Handled;
     }
     if(g_hFile == INVALID_HANDLE)
     {
         CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
         PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
-        return;
+        return Plugin_Handled;
     }
     g_hFile.Seek(0, SEEK_SET);
     
@@ -401,7 +418,7 @@ public Action CmdPlayback(int client, int args)
                     CPrintToChat(client, "%s Starting position not found! Playback cancelled.", g_cPrintPrefix);
                     g_bPlayback = false;
                     g_hFile.Close();
-                    return;
+                    return Plugin_Handled;
                 }
                 if(i < 3)
                     g_fStartPos[i] = StringToFloat(bu[i]);
@@ -415,7 +432,7 @@ public Action CmdPlayback(int client, int args)
             CPrintToChat(client, "%s Starting position not found! Playback cancelled.", g_cPrintPrefix);
             g_bPlayback = false;
             g_hFile.Close();
-            return;
+            return Plugin_Handled;
         }
     }
 
@@ -423,16 +440,23 @@ public Action CmdPlayback(int client, int args)
     g_bPlayback = true;
     g_bSimulating = false;
     CPrintToChat(client, "%s Playback started!", g_cPrintPrefix);
+    return Plugin_Handled;
 }
 
 public Action CmdStopPlayback(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     if(!g_bPlayback)
     {
         CPrintToChat(client, "%s No g_bPlayback active!", g_cPrintPrefix);
-        return;
+        return Plugin_Handled;
     }
     StopPlayback();
+    return Plugin_Handled;
 }
 
 public Action CmdDebug(int client, int args)
@@ -455,6 +479,11 @@ public Action CmdSaveGen(int client, int args)
 {
     if(args < 1)
     {
+        if(client == 0)
+        {
+            PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
+            return Plugin_Handled;
+        }
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
@@ -486,6 +515,12 @@ public Action CmdSaveGen(int client, int args)
         g_hFile = OpenFile(path, "w+");
         if(g_hFile == INVALID_HANDLE)
         {
+            if(client == 0)
+            {
+                PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+                return Plugin_Handled;
+            }
             CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
             PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
             return Plugin_Handled;
@@ -498,6 +533,11 @@ public Action CmdSaveGen(int client, int args)
         g_hFile.Close();    
     }
     
+    if(client == 0)
+    {
+        PrintToServer("%s Saved generation to %s", g_cPrintPrefixNoColor, tPath);
+        return Plugin_Handled;
+    }
     CPrintToChat(client, "%s Saved generation to %s", g_cPrintPrefix, tPath);
     return Plugin_Handled;
 }
@@ -506,6 +546,11 @@ public Action CmdLoadGen(int client, int args)
 {
     if(args < 1)
     {
+        if(client == 0)
+        {
+            PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
+            return Plugin_Handled;
+        }
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
@@ -526,6 +571,12 @@ public Action CmdLoadGen(int client, int args)
         g_hFile = OpenFile(path, "r");
         if(g_hFile == INVALID_HANDLE)
         {
+            if(client == 0)
+            {
+                PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+                return Plugin_Handled;
+            }
             CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
             PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
             return Plugin_Handled;
@@ -546,7 +597,10 @@ public Action CmdLoadGen(int client, int args)
             }
             else
             {
-                CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+                if(client == 0)
+                    PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+                else
+                    CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
                 g_bPlayback = false;
                 g_hFile.Close();
                 return Plugin_Handled;
@@ -556,7 +610,10 @@ public Action CmdLoadGen(int client, int args)
         g_hFile.Close();    
     }
     g_bPopulation = true;
-    CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
+    if(client == 0)
+        PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
+    else
+        CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
     return Plugin_Handled;
 }
 
@@ -564,7 +621,10 @@ public Action CmdSave(int client, int args)
 {
     if(args < 1)
     {
-        CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
     char arg[64];
@@ -586,7 +646,10 @@ public Action CmdSave(int client, int args)
     g_hFile = OpenFile(path, "w+");
     if(g_hFile == INVALID_HANDLE)
     {
-        CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
         PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
@@ -598,7 +661,10 @@ public Action CmdSave(int client, int args)
             g_hFile.WriteLine("%f,%f,%f", g_fGACheckPoints[i][0], g_fGACheckPoints[i][1], g_fGACheckPoints[i][2]);
     }
     g_hFile.Close();    
-    CPrintToChat(client, "%s Saved config to %s", g_cPrintPrefix, path);
+    if(client == 0)
+        PrintToServer("%s Saved config to %s", g_cPrintPrefixNoColor, path);
+    else
+        CPrintToChat(client, "%s Saved config to %s", g_cPrintPrefix, path);
     return Plugin_Handled;
 }
 
@@ -606,7 +672,10 @@ public Action CmdLoad(int client, int args)
 {
     if(args < 1)
     {
-        CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
     
@@ -620,12 +689,18 @@ public Action CmdLoad(int client, int args)
     }
     else
     {
-        CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
+        if(client == 0)
+            PrintToServer("%s Can't find file %s.", g_cPrintPrefixNoColor, arg);
+        else
+            CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
         return Plugin_Handled;
     }
     if(g_hFile == INVALID_HANDLE)
     {
-        CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
         PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
@@ -641,7 +716,10 @@ public Action CmdLoad(int client, int args)
         }
         else
         {
-            CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+            if(client == 0)
+                PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+            else
+                CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
             g_bPlayback = false;
             g_hFile.Close();
             return Plugin_Handled;
@@ -669,7 +747,10 @@ public Action CmdLoad(int client, int args)
         }
         else
         {
-            CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+            if(client == 0)
+                PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+            else
+                CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
             g_bPlayback = false;
             g_hFile.Close();
             return Plugin_Handled;
@@ -694,7 +775,10 @@ public Action CmdLoad(int client, int args)
         }
         else
         {
-            CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+            if(client == 0)
+                PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+            else
+                CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
             g_bPlayback = false;
             g_hFile.Close();
             return Plugin_Handled;
@@ -702,7 +786,10 @@ public Action CmdLoad(int client, int args)
         cp++;
     }
     g_hFile.Close(); 
-    CPrintToChat(client, "%s Loaded config from %s", g_cPrintPrefix, target);
+    if(client == 0)
+        PrintToServer("%s Loaded config from %s", g_cPrintPrefixNoColor, target);
+    else
+        CPrintToChat(client, "%s Loaded config from %s", g_cPrintPrefix, target);
     if(g_bDraw)
     {
         HideLines();
@@ -715,7 +802,10 @@ public Action CmdSetTimeScale(int client, int args)
 {
     if(args < 1)
     {
-        CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
     char arg[64];
@@ -723,11 +813,17 @@ public Action CmdSetTimeScale(int client, int args)
     float num;
     if(!StringToFloatEx(arg, num))
     {
-        CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
         return Plugin_Handled;
     }
     g_fTimeScale = num;
-    CPrintToChat(client, "%s Loop timescale set to %f", g_cPrintPrefix, num);
+    if(client == 0)
+        PrintToServer("%s Loop timescale set to %f", g_cPrintPrefixNoColor, num);
+    else
+        CPrintToChat(client, "%s Loop timescale set to %f", g_cPrintPrefix, num);
     return Plugin_Handled;
 }
 
@@ -735,7 +831,10 @@ public Action CmdSetFrames(int client, int args)
 {
     if(args < 1)
     {
-        CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
     char arg[64];
@@ -743,21 +842,35 @@ public Action CmdSetFrames(int client, int args)
     int num;
     if(!StringToIntEx(arg, num))
     {
-        CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
         return Plugin_Handled;
     }
     if(num > MAXFRAMES)
     {
-        CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
+        if(client == 0)
+            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAXFRAMES);
+        else
+            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
         num = MAXFRAMES;
     }
     g_iFrames = num;
-    CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, num);
+    if(client == 0)
+        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, num);
+    else
+        CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, num);
     return Plugin_Handled;
 }
 
 public Action CmdRemoveCheckpoint(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
@@ -788,6 +901,11 @@ public Action CmdRemoveCheckpoint(int client, int args)
 
 public Action CmdAddCheckpoint(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     for(int i=0; i<MAXCHECKPOINTS; i++)
     {
         if(g_fGACheckPoints[i][0] == 0 && g_fGACheckPoints[i][1] == 0 && g_fGACheckPoints[i][2] == 0)
@@ -815,6 +933,11 @@ public Action CmdAddCheckpoint(int client, int args)
 
 public Action CmdStart(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fGAStartPos);
     GetClientEyeAngles(client, g_fGAStartAng);
     CPrintToChat(client, "%s Start set", g_cPrintPrefix);
@@ -828,6 +951,11 @@ public Action CmdStart(int client, int args)
 
 public Action CmdEnd(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fGAEndPos);
     CPrintToChat(client, "%s End set", g_cPrintPrefix);
     if(g_bDraw)
@@ -843,7 +971,10 @@ public Action CmdClear(int client, int args)
     g_bPopulation = false;
     g_iTargetGen = 0;
     g_iCurrentGen = 0;
-    CPrintToChat(client, "%s Cleared generation!", g_cPrintPrefix);
+    if(client == 0)
+        PrintToServer("%s Cleared generation!", g_cPrintPrefixNoColor);
+    else
+        CPrintToChat(client, "%s Cleared generation!", g_cPrintPrefix);
     return Plugin_Handled;
 }
 
@@ -877,7 +1008,10 @@ public Action CmdLoop(int client, int args)
     SetEntProp(g_iBot, Prop_Data, "m_takedamage", 1, 1); // Buddha
     if(args < 1)
     {
-        CPrintToChat(client, "%s Missing number of generations argument", g_cPrintPrefix);
+        if(client == 0)
+            PrintToServer("%s Missing number of generations argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing number of generations argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
     char arg[64];
@@ -896,13 +1030,27 @@ public Action CmdLoop(int client, int args)
             Breed();
     }        
     else
-        CPrintToChat(client, "%s Couldn't parse number", g_cPrintPrefix);
+    {
+        if(client == 0)
+            PrintToServer("%s Couldn't parse number", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Couldn't parse number", g_cPrintPrefix);
+    }
         
+    if(client == 0)
+        PrintToServer("%s Loop started", g_cPrintPrefixNoColor);
+    else
+        CPrintToChat(client, "%s Loop started", g_cPrintPrefix);
     return Plugin_Handled;
 }
 
 public Action CmdPlay(int client, int args)
 {
+    if(client == 0)
+    {
+        PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
+        return Plugin_Handled;
+    }
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
