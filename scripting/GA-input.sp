@@ -35,6 +35,7 @@ int g_iTargetGen;
 int g_iCurrentGen;
 int g_iGAIndividualInputsInt[MAXFRAMES][12];
 int g_iFrames;
+int g_iStartTime = 200;
 
 float g_fTimeScale = 1.0;
 float g_fStartPos[3];
@@ -45,6 +46,8 @@ float g_fGAStartPos[3];
 float g_fGAStartAng[3];
 float g_fGAEndPos[3];
 float g_fGACheckPoints[MAXCHECKPOINTS][3];
+float g_fTelePos[3] = {0.0, 0.0, 0.0};
+float g_fOverrideFitness;
 
 File g_hFile;
 
@@ -145,7 +148,7 @@ public void OnMapEnd()
     g_iBot = -1;
     HideLines();
 }
-
+float g_fLastPos[3];
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
     if(g_bSimulating)
@@ -200,6 +203,99 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 
                 return Plugin_Continue;
             }
+            
+            if(g_iSimCurrentFrame != 0)
+            {
+                float fPos[3];
+                GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
+                if(GetVectorDistance(g_fLastPos, fPos) > 91.0)
+                {
+                    //PrintToServer("last: %f, %f, %f - cur: %f, %f, %f", g_fLastPos[0], g_fLastPos[1], g_fLastPos[2], fPos[0], fPos[1], fPos[2]);
+                    // teleported
+                    g_bSimulating = false;
+                    // uncomment to prevent parents of new generations from being measured again (faster), sometimes non-deterministic dunno why
+                    g_bGAIndividualMeasured[g_iSimIndex] = true;
+                    g_fTelePos = g_fLastPos;
+                    CalculateFitness(g_iSimIndex);
+                    if(g_bGAplayback)
+                    {
+                        g_bGAplayback = false;
+                        g_bSimulating = false;
+                        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                        return Plugin_Continue;
+                    }
+                    g_iSimIndex++;
+        
+                    if(g_iSimIndex < g_iPopulationSize)
+                    {
+                        MeasureFitness(g_iSimIndex);
+                    }
+                    else
+                    {
+                        if(g_iTargetGen > g_iCurrentGen)
+                        {
+                            Breed();
+                        }                        
+                        else
+                        {
+                            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
+                            ServerCommand("host_timescale 1");
+                        }
+                    }
+                    
+                    return Plugin_Continue;
+                }
+            }
+            GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fLastPos);
+            
+            if(g_iSimCurrentFrame > g_iStartTime)
+            {
+                float fPos[3];
+                GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
+                float cPos[3];
+                ClosestPoint(g_fGACheckPoints[0], g_fGAStartPos, fPos, cPos);
+                // within 200 units of start after 200 ticks (hasn't left spawn area)
+                if(GetVectorDistance(cPos, g_fGAStartPos) < 80)
+                {
+                    g_bSimulating = false;
+                    // uncomment to prevent parents of new generations from being measured again (faster), sometimes non-deterministic dunno why
+                    g_bGAIndividualMeasured[g_iSimIndex] = true;
+                    g_fOverrideFitness = -10000000.0;
+                    if(GetVectorDistance(cPos, g_fGAStartPos) > 0)
+                		g_fOverrideFitness += GetVectorDistance(cPos, g_fGAStartPos);
+            		else
+            			g_fOverrideFitness -= GetVectorDistance(fPos, g_fGAStartPos);
+                    CalculateFitness(g_iSimIndex);
+                    if(g_bGAplayback)
+                    {
+                        g_bGAplayback = false;
+                        g_bSimulating = false;
+                        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                        return Plugin_Continue;
+                    }
+                    g_iSimIndex++;
+        
+                    if(g_iSimIndex < g_iPopulationSize)
+                    {
+                        MeasureFitness(g_iSimIndex);
+                    }
+                    else
+                    {
+                        if(g_iTargetGen > g_iCurrentGen)
+                        {
+                            Breed();
+                        }                        
+                        else
+                        {
+                            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
+                            ServerCommand("host_timescale 1");
+                        }
+                    }
+                    
+                    return Plugin_Continue;
+                }
+            }
+            
             float fAng[3];
             fAng[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][0];
             fAng[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][1];
@@ -208,6 +304,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             buttons = g_iGAIndividualInputsInt[g_iSimCurrentFrame][g_iSimIndex];
             
             buttons |= IN_RELOAD; // Autoreload
+            impulse |= 101;
                 
             if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
                 vel[0] = 0.0;
@@ -224,6 +321,12 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 vel[1] = 400.0;
             
             g_iSimCurrentFrame++;
+            
+            // disable attack
+            buttons &= ~IN_ATTACK;
+            buttons &= ~IN_ATTACK2;
+            
+            
             
             return Plugin_Changed;
         }
@@ -1084,7 +1187,7 @@ public Action Timer_SetupBot(Handle hTimer)
             SetFailState("%s", "Cannot create bot");
         }
         ChangeClientTeam(g_iBot, g_iBotTeam);
-        TF2_SetPlayerClass(g_iBot, TFClass_Soldier);
+        TF2_SetPlayerClass(g_iBot, TFClass_Spy);
         ServerCommand("mp_waitingforplayers_cancel 1;");
     } 
     else 
@@ -1244,36 +1347,42 @@ public void CalculateFitness(int individual)
     GetEntPropVector(g_iBot, Prop_Data, "m_vecAbsOrigin", playerPos);
     cP = g_fGAStartPos;
     
+    if(g_fTelePos[0] != 0.0 && g_fTelePos[1] != 0.0 && g_fTelePos[2] != 0.0)
+        playerPos = g_fTelePos;
+    
+    g_fTelePos[0] = 0.0;
+    g_fTelePos[1] = 0.0;
+    g_fTelePos[2] = 0.0;
+    
     for(new i = 0; i < MAXCHECKPOINTS;i++) {
         if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
         {
             float temp[3];
             if(i == 0)
             {
-                ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i], playerPos, temp);           
+                ClosestPoint(g_fGACheckPoints[i], g_fGAStartPos, playerPos, temp);
+                /*if(g_bDraw)
+			    {
+			        int ent = DrawLaser(playerPos, temp, 0, 255, 255);
+			        CreateTimer(5.0, Timer_KillEnt, ent);
+			    }*/
             } 
             else
             {
-                if(i+1<MAXCHECKPOINTS)
+                if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
                 {
-                    if(g_fGACheckPoints[i+1][0] != 0 && g_fGACheckPoints[i+1][1] != 0 && g_fGACheckPoints[i+1][2] != 0)
-                    {
-                        ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i+1], playerPos, temp);
-                    }
-                    else
-                    {
-                        ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, playerPos, temp);
-                    }
+                    ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i-1], playerPos, temp);
                 }
-                 else
+                else
                 {
-                    ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, playerPos, temp);
+                    ClosestPoint(g_fGAEndPos, g_fGACheckPoints[i-1], playerPos, temp);
                 }
             }
             if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
             {
                 cP = temp;
                 lastCP = i;
+                //PrintToServer("CP %d", i);
             }
         }
         else
@@ -1281,7 +1390,7 @@ public void CalculateFitness(int individual)
             // no cps
             if(i == 0)
             {
-                ClosestPoint(g_fGAStartPos, g_fGAEndPos, playerPos, cP);
+                ClosestPoint(g_fGAEndPos, g_fGAStartPos, playerPos, cP);
                 lastCP = i;
             }
         }
@@ -1310,6 +1419,9 @@ public void CalculateFitness(int individual)
     dist -= GetVectorDistance(cP, playerPos);
         
     g_fGAIndividualFitness[individual] = dist;
+    if(g_fOverrideFitness != 0.0)
+        g_fGAIndividualFitness[individual] = g_fOverrideFitness;
+    g_fOverrideFitness = 0.0;
     PrintToServer("%s Fitness of %d-%d: %f", g_cPrintPrefixNoColor, g_iCurrentGen, individual, g_fGAIndividualFitness[individual]);
     if(g_bDraw)
     {
