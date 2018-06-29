@@ -15,12 +15,14 @@
 #define MAXCHECKPOINTS 100
 // about 10 mins (assuming 66.6/s)
 #define MAXFRAMES 40000
+#define POPULATION 100
+#define LUCKYFEW 10
 
 bool g_bRecording;
 bool g_bPlayback;
 bool g_bSimulating;
 bool g_bBCExtension;
-bool g_bGAIndividualMeasured[12];
+bool g_bGAIndividualMeasured[POPULATION];
 bool g_bPopulation;
 bool g_bGAplayback;
 bool g_bDraw;
@@ -28,20 +30,19 @@ bool g_bDraw;
 int g_iBot = -1;
 int g_iBotTeam = 2;
 int g_iPossibleButtons[8] = {IN_ATTACK, IN_ATTACK2, IN_JUMP, IN_DUCK, IN_FORWARD, IN_BACK, IN_MOVELEFT, IN_MOVERIGHT};
-int g_iPopulationSize = 12;
 int g_iSimIndex;
 int g_iSimCurrentFrame;
 int g_iTargetGen;
 int g_iCurrentGen;
-int g_iGAIndividualInputsInt[MAXFRAMES][12];
+int g_iGAIndividualInputsInt[MAXFRAMES][POPULATION];
 int g_iFrames;
 int g_iStartTime = 200;
 
 float g_fTimeScale = 1.0;
 float g_fStartPos[3];
 float g_fStartAng[3];
-float g_fGAIndividualInputsFloat[MAXFRAMES][12][2];
-float g_fGAIndividualFitness[12];
+float g_fGAIndividualInputsFloat[MAXFRAMES][POPULATION][2];
+float g_fGAIndividualFitness[POPULATION];
 float g_fGAStartPos[3];
 float g_fGAStartAng[3];
 float g_fGAEndPos[3];
@@ -170,7 +171,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 }
                 g_iSimIndex++;
     
-                if(g_iSimIndex < g_iPopulationSize)
+                if(g_iSimIndex < POPULATION)
                 {
                     MeasureFitness(g_iSimIndex);
                 }
@@ -194,7 +195,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
                 g_iSimIndex++;
     
-                if(g_iSimIndex == g_iPopulationSize)
+                if(g_iSimIndex == POPULATION)
                 {
                     g_bSimulating = false;
                     if(g_iTargetGen > g_iCurrentGen)
@@ -226,7 +227,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     g_iSimIndex++;
         
-                    if(g_iSimIndex < g_iPopulationSize)
+                    if(g_iSimIndex < POPULATION)
                     {
                         MeasureFitness(g_iSimIndex);
                     }
@@ -275,7 +276,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     g_iSimIndex++;
         
-                    if(g_iSimIndex < g_iPopulationSize)
+                    if(g_iSimIndex < POPULATION)
                     {
                         MeasureFitness(g_iSimIndex);
                     }
@@ -607,7 +608,7 @@ public Action CmdSaveGen(int client, int args)
     }
     char tPath[64];
     strcopy(tPath, sizeof(tPath), path);
-    for(int i=0; i < g_iPopulationSize; i++)
+    for(int i=0; i < POPULATION; i++)
     {
         path = tPath;
         char suff[8] = "-";
@@ -663,7 +664,7 @@ public Action CmdLoadGen(int client, int args)
     StrCat(path, sizeof(path), arg);
     char tPath[64];
     strcopy(tPath, sizeof(tPath), path);
-    for(int i=0; i < g_iPopulationSize; i++)
+    for(int i=0; i < POPULATION; i++)
     {
         path = tPath;
         char suff[8] = "-";
@@ -1281,7 +1282,7 @@ public void GeneratePopulation()
 {
     for(int t=0; t < g_iFrames; t++)
     {
-        for(int p=0; p < g_iPopulationSize; p++)
+        for(int p=0; p < POPULATION; p++)
         {
             for(int i=0; i < sizeof(g_iPossibleButtons); i++)
             {
@@ -1331,7 +1332,7 @@ public void GeneratePopulation()
     PrintToServer("%s Population generated!", g_cPrintPrefixNoColor);
     g_bPopulation = true;
     g_iCurrentGen = 0;
-    for(int i=0;i<g_iPopulationSize; i++)
+    for(int i=0;i<POPULATION; i++)
     {
         g_bGAIndividualMeasured[i] = false;
     }
@@ -1413,7 +1414,7 @@ public void CalculateFitness(int individual)
     if(lastCP == 0)
         dist += GetVectorDistance(g_fGAStartPos, cP);
     else
-        dist += GetVectorDistance(g_fGACheckPoints[lastCP], cP);
+        dist += GetVectorDistance(g_fGACheckPoints[lastCP-1], cP);
         
     // subtract distance from line
     dist -= GetVectorDistance(cP, playerPos);
@@ -1478,32 +1479,53 @@ public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
 
 public void Breed()
 {
-    int fittest[6];
-    float order[12];
-    for(int i=0; i<g_iPopulationSize;i++)
+    int fittest[POPULATION/2];
+    float order[POPULATION];
+    for(int i=0; i<POPULATION;i++)
         order[i] = g_fGAIndividualFitness[i];
 
-    SortFloats(order, g_iPopulationSize, Sort_Descending);
-    for(int i=0; i<g_iPopulationSize/2; i++)
+    SortFloats(order, POPULATION, Sort_Descending);
+    for(int i=0; i<(POPULATION/2)-LUCKYFEW; i++)
     {
-        for(int e=0; e<g_iPopulationSize; e++)
+        for(int e=0; e<POPULATION; e++)
         {
             if(order[i] == g_fGAIndividualFitness[e])
                 fittest[i] = e;
         }
     }
     
-    // pair fittest randomly
-    int parents[3][2];
-    bool taken[6];
+    // make lucky few individuals parents even if they're not the fittest
+    for(int i=0; i<LUCKYFEW; i++)
+    {
+    	bool t = true;
+    	while(t)
+    	{
+    		int r = GetRandomInt(0, POPULATION-1);
+    		bool tt;
+    		for(int e=0; e<POPULATION/2; e++)
+    		{
+    			if(fittest[e] == r)
+    				tt = true;
+    		}
+    		if(!tt)
+    		{
+    			fittest[(POPULATION/2)-LUCKYFEW+i] = r;
+    			t = false;
+    		}
+    	}
+    }
+    
+    // pair parents randomly
+    int parents[POPULATION/4][2];
+    bool taken[POPULATION/2];
     int par = 0;
-    for(int i=0; i<g_iPopulationSize/2; i++)
+    for(int i=0; i<POPULATION/2; i++)
     {
         if(!taken[i])
         {
-            int rand = GetRandomInt(0, (g_iPopulationSize/2) - 1);
+            int rand = GetRandomInt(0, (POPULATION/2) - 1);
             while(taken[rand] || rand == i)
-                rand = GetRandomInt(0, (g_iPopulationSize/2) - 1);
+                rand = GetRandomInt(0, (POPULATION/2) - 1);
             
             parents[par][0] = i;
             parents[par][1] = rand;
@@ -1512,12 +1534,12 @@ public void Breed()
             par++;
         }
     }
-    for(int p=0; p<g_iPopulationSize/4; p++)
+    for(int p=0; p<POPULATION/4; p++)
     {
-        for(int i=0; i<g_iPopulationSize; i++)
+        for(int i=0; i<POPULATION; i++)
         {
             bool cont = false;
-            for(int e=0; e<g_iPopulationSize/2; e++)
+            for(int e=0; e<POPULATION/2; e++)
             {
                 if(fittest[e] == i)
                     cont = true;
@@ -1575,7 +1597,7 @@ public void Breed()
                     // chance for inputs to be duplicated from previous tick
                     if(t != 0)
                     {
-                        if(GetRandomInt(0, 100) > 20)
+                        if(GetRandomInt(0, 100) > 50)
                             g_fGAIndividualInputsFloat[t][i][a] = g_fGAIndividualInputsFloat[t-1][i][a];
                     }
                 }
