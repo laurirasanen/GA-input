@@ -37,6 +37,7 @@ int g_iCurrentGen;
 int g_iGAIndividualInputsInt[MAXFRAMES][POPULATION];
 int g_iFrames;
 int g_iStartTime = 200;
+int g_iPlayBackStart = 0;
 
 float g_fTimeScale = 1.0;
 float g_fStartPos[3];
@@ -156,6 +157,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     {
         if(client == g_iBot)
         {
+            if(g_iSimCurrentFrame == 0)
+            {
+            	if(GetGameTickCount() % 1000 != 0)
+            		return Plugin_Continue;
+        		
+		        g_iPlayBackStart = GetGameTickCount();
+		        PrintToServer("Playback start tick: %d", g_iPlayBackStart);
+            }
             if(g_iSimCurrentFrame == g_iFrames)
             {
                 g_bSimulating = false;
@@ -167,6 +176,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     g_bGAplayback = false;
                     g_bSimulating = false;
                     CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                    int currentTick = GetGameTickCount();
+                    PrintToServer("Playback end tick: %d", currentTick);
+                    PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
                     return Plugin_Continue;
                 }
                 g_iSimIndex++;
@@ -222,7 +234,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     {
                         g_bGAplayback = false;
                         g_bSimulating = false;
+                        int currentTick = GetGameTickCount();
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                        PrintToServer("Playback end tick: %d", currentTick);
+                        PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
                         return Plugin_Continue;
                     }
                     g_iSimIndex++;
@@ -256,7 +271,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 float cPos[3];
                 ClosestPoint(g_fGACheckPoints[0], g_fGAStartPos, fPos, cPos);
                 // within 200 units of start after 200 ticks (hasn't left spawn area)
-                if(GetVectorDistance(cPos, g_fGAStartPos) < 80)
+                /*if(GetVectorDistance(cPos, g_fGAStartPos) < 80)
                 {
                     g_bSimulating = false;
                     // uncomment to prevent parents of new generations from being measured again (faster), sometimes non-deterministic dunno why
@@ -272,6 +287,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                         g_bGAplayback = false;
                         g_bSimulating = false;
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                        int currentTick = GetGameTickCount();
+                        PrintToServer("Playback end tick: %d", currentTick);
+                        PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
                         return Plugin_Continue;
                     }
                     g_iSimIndex++;
@@ -294,7 +312,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     
                     return Plugin_Continue;
-                }
+                }*/
             }
             
             float fAng[3];
@@ -324,8 +342,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             g_iSimCurrentFrame++;
             
             // disable attack
-            buttons &= ~IN_ATTACK;
-            buttons &= ~IN_ATTACK2;
+            // buttons &= ~IN_ATTACK;
+            // buttons &= ~IN_ATTACK2;
             
             
             
@@ -1171,8 +1189,8 @@ public Action CmdPlay(int client, int args)
         CPrintToChat(client, "%s Playing %d-%d", g_cPrintPrefix, g_iCurrentGen, index);
     }        
     else
-        CPrintToChat(client, "%s Couldn't parse number", g_cPrintPrefix);
-        
+        CPrintToChat(client, "%s Couldn't parse number", g_cPrintPrefix);        
+    
     return Plugin_Handled;
 }
 
@@ -1188,7 +1206,7 @@ public Action Timer_SetupBot(Handle hTimer)
             SetFailState("%s", "Cannot create bot");
         }
         ChangeClientTeam(g_iBot, g_iBotTeam);
-        TF2_SetPlayerClass(g_iBot, TFClass_Spy);
+        TF2_SetPlayerClass(g_iBot, TFClass_Soldier);
         ServerCommand("mp_waitingforplayers_cancel 1;");
     } 
     else 
@@ -1397,6 +1415,12 @@ public void CalculateFitness(int individual)
         }
     }
     
+    Handle trace = TR_TraceRayFilterEx(playerPos, cP, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint, TraceRayDontHitSelf, g_iBot);
+    if(TR_DidHit(trace))
+	   g_fOverrideFitness = -10000000.0;
+   
+	CloseHandle(trace);
+    
     //PrintToServer("%s lastCP: %d", g_cPrintPrefixNoColor, lastCP);
     
     float dist;
@@ -1445,6 +1469,20 @@ public void CalculateFitness(int individual)
         file.Close();
     }*/
 }
+
+public bool TraceRayDontHitSelf(int entity, int contentsMask, any data)
+{
+	// Don't return players or player projectiles
+	int entity_owner;
+	entity_owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
+
+	if(entity != data && !(0 < entity <= MaxClients) && !(0 < entity_owner <= MaxClients))
+	{
+		return true;
+	}
+	return false;
+}
+
 
 public void MeasureFitness(int index)
 {
