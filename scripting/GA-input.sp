@@ -26,6 +26,7 @@ bool g_bGAIndividualMeasured[POPULATION];
 bool g_bPopulation;
 bool g_bGAplayback;
 bool g_bDraw;
+bool g_bMadeToEnd;
 
 int g_iBot = -1;
 int g_iBotTeam = 2;
@@ -39,6 +40,7 @@ int g_iFrames;
 int g_iStartTime = 200;
 int g_iPlayBackStart = 0;
 int g_iRecordingClient = -1;
+int g_iLeftOverFrames = 0;
 
 float g_fTimeScale = 100.0;
 float g_fStartPos[3];
@@ -310,8 +312,63 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             {
                 float fPos[3];
                 GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
-                float cPos[3];
-                ClosestPoint(g_fGACheckPoints[0], g_fGAStartPos, fPos, cPos);
+                if (GetVectorDistance(fPos, g_fGAEndPos) < 500 && fPos[2] > g_fGAEndPos[2])
+                {
+                	// At end
+                	PrintToServer("%d reached the end in %d frames!", g_iSimIndex, g_iSimCurrentFrame);
+
+                    g_bSimulating = false;
+                    g_bGAIndividualMeasured[g_iSimIndex] = true;
+                    g_bMadeToEnd = true;
+                    g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
+                    CalculateFitness(g_iSimIndex);
+                    if(g_bGAplayback)
+                    {
+                        g_bGAplayback = false;
+                        g_bSimulating = false;
+                        int currentTick = GetGameTickCount();
+                        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                        PrintToServer("Playback end tick: %d", currentTick);
+                        PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
+                        return Plugin_Continue;
+                    }
+                    g_iSimIndex++;
+        
+                    if(g_iSimIndex < POPULATION)
+                    {
+                        MeasureFitness(g_iSimIndex);
+                    }
+                    else
+                    {
+                    	float bestFitness = 0;
+	                	int fittestIndex = 0;
+	            	    for(int i=0; i<POPULATION;i++)
+	    				{
+	    					if(g_fGAIndividualFitness[i] > bestFitness)
+	    					{
+	    						bestFitness = g_fGAIndividualFitness[i];
+	    						fittestIndex = i;
+	    					}
+	    				}
+
+	                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+
+                        if(g_iTargetGen > g_iCurrentGen)
+                        {
+                            Breed();
+                        }                        
+                        else
+                        {
+                            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
+                            ServerCommand("host_timescale 1");
+                        }
+                    }
+                    
+                    return Plugin_Continue;
+                }
+
+                /*float cPos[3];
+                ClosestPoint(g_fGACheckPoints[0], g_fGAStartPos, fPos, cPos);*/
                 // within 200 units of start after 200 ticks (hasn't left spawn area)
                 /*if(GetVectorDistance(cPos, g_fGAStartPos) < 80)
                 {
@@ -825,7 +882,7 @@ public Action CmdLoadGen(int client, int args)
     }
 
     if(client == 0)
-        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, g_iFrames);
+        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
     else
         CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
 
@@ -924,7 +981,7 @@ public Action CmdLoadGenFromRec(int client, int args)
 
     g_iFrames = frames;
     if(client == 0)
-        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, g_iFrames);
+        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
     else
         CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
 
@@ -1123,7 +1180,7 @@ public Action CmdLoad(int client, int args)
     }
 
     if(client == 0)
-        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, g_iFrames);
+        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
     else
         CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
 
@@ -1695,6 +1752,14 @@ public void CalculateFitness(int individual)
         g_fGAIndividualFitness[individual] = g_fOverrideFitness;
 
     g_fOverrideFitness = 0.0;
+
+    if (g_bMadeToEnd)
+    {
+    	g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 10;
+    }
+
+    g_bMadeToEnd = false;
+    g_iLeftOverFrames = 0;
 
     PrintToServer("%s Fitness of %d-%d: %f", g_cPrintPrefixNoColor, g_iCurrentGen, individual, g_fGAIndividualFitness[individual]);
 
