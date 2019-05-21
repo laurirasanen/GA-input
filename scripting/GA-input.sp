@@ -41,6 +41,8 @@ int g_iStartTime = 200;
 int g_iPlayBackStart = 0;
 int g_iRecordingClient = -1;
 int g_iLeftOverFrames = 0;
+int g_iMutationChance = 1;
+int g_iRotationMutationChance = 100;
 
 float g_fTimeScale = 100.0;
 float g_fStartPos[3];
@@ -53,6 +55,7 @@ float g_fGAEndPos[3];
 float g_fGACheckPoints[MAXCHECKPOINTS][3];
 float g_fTelePos[3] = {0.0, 0.0, 0.0};
 float g_fOverrideFitness;
+float g_fLastPos[3];
 
 File g_hFile;
 
@@ -109,7 +112,7 @@ public void OnPluginStart()
     RegConsoleCmd("ga_frames", CmdSetFrames, "");
     
     CreateTimer(1.0, Timer_SetupBot);
-    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0");
+    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
     if(!FileExists("/GA/"))
         CreateDirectory("/GA/", 557);
     if(!FileExists("/GA/rec/"))
@@ -142,7 +145,7 @@ public void OnMapStart()
 {
     g_iBot = -1;
     CreateTimer(1.0, Timer_SetupBot);
-    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeOut 0; exec surf; sv_timeout 120");
+    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
 }
 
 public void OnMapEnd()
@@ -154,21 +157,13 @@ public void OnMapEnd()
     g_iBot = -1;
     HideLines();
 }
-float g_fLastPos[3];
+
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
     if(g_bSimulating)
     {
         if(client == g_iBot)
         {
-            if(g_iSimCurrentFrame == 0)
-            {
-            	/*if(GetGameTickCount() % 1000 != 0)
-            		return Plugin_Continue;*/
-        		
-		        g_iPlayBackStart = GetGameTickCount();
-		        PrintToServer("Playback start tick: %d", g_iPlayBackStart);
-            }
             if(g_iSimCurrentFrame == g_iFrames)
             {
                 g_bSimulating = false;
@@ -222,7 +217,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             }
             if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAplayback)
             {
-                PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
+                //PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
                 g_iSimIndex++;
     
                 if(g_iSimIndex == POPULATION)
@@ -1573,7 +1568,7 @@ public void GeneratePopulation()
             for(int i=0; i < sizeof(g_iPossibleButtons); i++)
             {
                 // random key inputs
-                if(GetRandomInt(0, 100) > 10)
+                if(GetRandomInt(0, 100) < g_iMutationChance)
                 {
                     if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i])
                         g_iGAIndividualInputsInt[t][p] &= ~g_iPossibleButtons[i];
@@ -1586,7 +1581,7 @@ public void GeneratePopulation()
                 {
                     if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i])
                     {
-                        if(GetRandomInt(0, 100) > 90)
+                        if(GetRandomInt(0, 100) < 90)
                         {
                             g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                         }                            
@@ -1597,7 +1592,7 @@ public void GeneratePopulation()
             g_fGAIndividualInputsFloat[t][p][1] = g_fGAStartAng[1];
 
             // random mouse movement
-            if(GetRandomInt(0,100) > 95)
+            if(GetRandomInt(0,100) < 95)
             {
             	int prevPitch = g_fGAStartAng[0];
             	int prevYaw = g_fGAStartAng[1];
@@ -1631,7 +1626,7 @@ public void GeneratePopulation()
             {
                 for(int a=0; a<2; a++)
                 {
-                    if(GetRandomInt(0, 100) > 5)
+                    if(GetRandomInt(0, 100) < g_iMutationChance)
                     {
                         g_fGAIndividualInputsFloat[t][p][a] = g_fGAIndividualInputsFloat[t-1][p][a];
                     }                        
@@ -1761,7 +1756,7 @@ public void CalculateFitness(int individual)
     g_bMadeToEnd = false;
     g_iLeftOverFrames = 0;
 
-    PrintToServer("%s Fitness of %d-%d: %f", g_cPrintPrefixNoColor, g_iCurrentGen, individual, g_fGAIndividualFitness[individual]);
+    //PrintToServer("%s Fitness of %d-%d: %f", g_cPrintPrefixNoColor, g_iCurrentGen, individual, g_fGAIndividualFitness[individual]);
 
     if(g_bDraw)
     {
@@ -1915,24 +1910,12 @@ public void Breed()
                         g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
 
                     // random mutations
-                    if(GetRandomInt(0, 100) > 5)
+                    if(GetRandomInt(0, 1000) < g_iMutationChance)
                     {
                         if(g_iGAIndividualInputsInt[t][i] & g_iPossibleButtons[a])
                             g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
                         else
                             g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
-                    }
-
-                    // chance for inputs to be duplicated from previous tick
-                    if(t != 0)
-                    {
-                        if(GetRandomInt(0, 100) > 5)
-                        {
-                            if(g_iGAIndividualInputsInt[t-1][i] & g_iPossibleButtons[a])
-                                g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
-                            else
-                                g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
-                        }
                     }
                 }
 
@@ -1943,7 +1926,7 @@ public void Breed()
                 }
 
                 // random mutations
-                if(GetRandomInt(0, 100) > 5)
+                if(GetRandomInt(0, 1000) < g_iRotationMutationChance)
                 {
                     g_fGAIndividualInputsFloat[t][i][0] += GetRandomFloat(-1.0, 1.0);
 
@@ -1953,7 +1936,7 @@ public void Breed()
                 	if (g_fGAIndividualInputsFloat[t][i][0] > 89.0)
                     	g_fGAIndividualInputsFloat[t][i][0] = 89.0;
                 }
-                if(GetRandomInt(0, 100) > 5)
+                if(GetRandomInt(0, 1000) < g_iRotationMutationChance)
                 {
                     g_fGAIndividualInputsFloat[t][i][1] += GetRandomFloat(-1.0, 1.0);
 
@@ -1962,16 +1945,6 @@ public void Breed()
 
                 	if (g_fGAIndividualInputsFloat[t][i][1] > 180.0)
                     	g_fGAIndividualInputsFloat[t][i][1] -= 360.0;
-                }
-
-                for(int a=0; a<2; a++)
-                {
-                    // chance for inputs to be duplicated from previous tick
-                    if(t != 0)
-                    {
-                        if(GetRandomInt(0, 100) > 5)
-                            g_fGAIndividualInputsFloat[t][i][a] = g_fGAIndividualInputsFloat[t-1][i][a];
-                    }
                 }
             }
             g_bGAIndividualMeasured[i] = false;
