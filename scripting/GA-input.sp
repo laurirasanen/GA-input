@@ -237,7 +237,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
                     g_bSimulating = false;
                     if(g_iTargetGen > g_iCurrentGen)
-                        Breed();                 
+                        Breed();  
+                    else
+                    {
+                    	ServerCommand("host_timescale 1");
+                    }               
                 }
                 
                 return Plugin_Continue;
@@ -1928,7 +1932,7 @@ public void Breed()
                 // random mutations
                 if(GetRandomInt(0, 1000) < g_iRotationMutationChance)
                 {
-                    g_fGAIndividualInputsFloat[t][i][0] += GetRandomFloat(-1.0, 1.0);
+                    g_fGAIndividualInputsFloat[t][i][0] += GetRandomFloat(-0.1, 0.1);
 
                     if (g_fGAIndividualInputsFloat[t][i][0] < -89.0)
                     	g_fGAIndividualInputsFloat[t][i][0] = -89.0;
@@ -1938,7 +1942,7 @@ public void Breed()
                 }
                 if(GetRandomInt(0, 1000) < g_iRotationMutationChance)
                 {
-                    g_fGAIndividualInputsFloat[t][i][1] += GetRandomFloat(-1.0, 1.0);
+                    g_fGAIndividualInputsFloat[t][i][1] += GetRandomFloat(-0.1, 0.1);
 
                     if (g_fGAIndividualInputsFloat[t][i][1] < -180.0)
                     	g_fGAIndividualInputsFloat[t][i][1] += 360.0;
