@@ -41,8 +41,8 @@ int g_iStartTime = 200;
 int g_iPlayBackStart = 0;
 int g_iRecordingClient = -1;
 int g_iLeftOverFrames = 0;
-int g_iMutationChance = 1;
-int g_iRotationMutationChance = 100;
+int g_iMutationChance = 10;
+int g_iRotationMutationChance = 300;
 
 float g_fTimeScale = 100.0;
 float g_fStartPos[3];
@@ -110,7 +110,9 @@ public void OnPluginStart()
     // variables
     RegConsoleCmd("ga_timescale", CmdSetTimeScale, "");
     RegConsoleCmd("ga_frames", CmdSetFrames, "");
-    
+    RegConsoleCmd("ga_mutation_chance", CmdSetMutationChance, "");
+    RegConsoleCmd("ga_rotation_mutation_chance", CmdSetRotationMutationChance, "");
+
     CreateTimer(1.0, Timer_SetupBot);
     ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
     if(!FileExists("/GA/"))
@@ -314,13 +316,15 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 if (GetVectorDistance(fPos, g_fGAEndPos) < 500 && fPos[2] > g_fGAEndPos[2])
                 {
                 	// At end
-                	PrintToServer("%d reached the end in %d frames!", g_iSimIndex, g_iSimCurrentFrame);
-
+                	
                     g_bSimulating = false;
                     g_bGAIndividualMeasured[g_iSimIndex] = true;
                     g_bMadeToEnd = true;
                     g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
                     CalculateFitness(g_iSimIndex);
+
+                    PrintToServer("%d reached the end in %d frames! (%f)", g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
+
                     if(g_bGAplayback)
                     {
                         g_bGAplayback = false;
@@ -866,10 +870,6 @@ public Action CmdLoadGen(int client, int args)
     }
 
     g_bPopulation = true;
-    if(client == 0)
-        PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
-    else
-        CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
 
     if(g_iFrames > MAXFRAMES)
     {
@@ -878,12 +878,20 @@ public Action CmdLoadGen(int client, int args)
         else
             CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
         g_iFrames = MAXFRAMES;
-    }
+    }  
 
     if(client == 0)
-        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
+    {
+    	PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
+    	PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
+    	PrintToServer("%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+    }
     else
-        CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+    {
+    	CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+		CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
+		CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+    }              
 
     return Plugin_Handled;
 }
@@ -1252,6 +1260,74 @@ public Action CmdSetFrames(int client, int args)
     return Plugin_Handled;
 }
 
+public Action CmdSetMutationChance(int client, int args)
+{
+    if(args < 1)
+    {
+        if(client == 0)
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    int num;
+
+    if(!StringToIntEx(arg, num))
+    {
+        if(client == 0)
+            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+
+    g_iMutationChance = num;
+
+    if(client == 0)
+        PrintToServer("%s Mutation chance set to %d", g_cPrintPrefixNoColor, num);
+    else
+        CPrintToChat(client, "%s Mutation chance set to %d", g_cPrintPrefix, num);
+
+    return Plugin_Handled;
+}
+
+public Action CmdSetRotationMutationChance(int client, int args)
+{
+    if(args < 1)
+    {
+        if(client == 0)
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    int num;
+
+    if(!StringToIntEx(arg, num))
+    {
+        if(client == 0)
+            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        else
+            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+
+    g_iRotationMutationChance = num;
+
+    if(client == 0)
+        PrintToServer("%s Rotation mutation chance set to %d", g_cPrintPrefixNoColor, num);
+    else
+        CPrintToChat(client, "%s Rotation mutation chance set to %d", g_cPrintPrefix, num);
+
+    return Plugin_Handled;
+}
+
 public Action CmdRemoveCheckpoint(int client, int args)
 {
     if(client == 0)
@@ -1374,6 +1450,7 @@ public Action CmdGen(int client, int args)
 
 public Action CmdSim(int client, int args)
 {
+	ServerCommand("host_timescale %f", g_fTimeScale);
     MeasureFitness(0);
     return Plugin_Handled;
 }
@@ -1656,7 +1733,7 @@ public void CalculateFitness(int individual)
 {
     float playerPos[3];
     float cP[3];
-    int lastCP;
+    int lastCP = -1;
     
     GetEntPropVector(g_iBot, Prop_Data, "m_vecAbsOrigin", playerPos);
     cP = g_fGAStartPos;
@@ -1668,50 +1745,74 @@ public void CalculateFitness(int individual)
     g_fTelePos[1] = 0.0;
     g_fTelePos[2] = 0.0;
     
-    for(new i = 0; i < MAXCHECKPOINTS;i++) {
+
+
+    for(new i = -1; i < MAXCHECKPOINTS - 1;i++) {
     	float temp[3];
 
-        if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
+        if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
         {
-            if(i == 0)
-            {
-                ClosestPoint(g_fGACheckPoints[i], g_fGAStartPos, playerPos, temp);
-                /*if(g_bDraw)
-			    {
-			        int ent = DrawLaser(playerPos, temp, 0, 255, 255);
-			        CreateTimer(5.0, Timer_KillEnt, ent);
-			    }*/
-            } 
-            else
-            {
-                ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i-1], playerPos, temp);
-            }
+        	float currentToNext[3];
+        	float playerToCurrent[3];
 
-            if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
-            {
-                cP = temp;
-                lastCP = i;
-            }
-        }
-        else
-        {
-            if(i == 0)
-            {
-            	// no cps
-                ClosestPoint(g_fGAEndPos, g_fGAStartPos, playerPos, cP);
-                lastCP = i;
-                break;
-            }
-            else
-            {
-            	// last cp was i - 1
-            	ClosestPoint(g_fGAEndPos, g_fGACheckPoints[i-1], playerPos, temp);
+        	if(i == -1)
+        	{
+        		// start to first cp
+        		ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], playerPos, temp);
+        		SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, currentToNext);
+        		SubtractVectors(g_fGAStartPos, playerPos, playerToCurrent);
+        	}
+        	else
+        	{
+        		ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], playerPos, temp);
+        		SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], currentToNext);
+        		SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
+        	}             
+
+        	if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
+        	{
+        		// If dot product < 0
+        		// player has passed checkpoint i
 
 	            if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
 	            {
 	                cP = temp;
 	                lastCP = i;
 	            }
+        	}
+        }
+        else
+        {
+        	
+
+            if(i == -1)
+            {
+            	// no cps
+                ClosestPoint(g_fGAEndPos, g_fGAStartPos, playerPos, cP);
+                break;
+            }
+            else
+            {
+            	float currentToNext[3];
+        		float playerToCurrent[3];
+
+            	// last cp was i
+            	ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, playerPos, temp);
+            	SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], currentToNext);
+        		SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
+
+        		if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
+	        	{
+	        		// If dot product < 0
+	        		// player has passed checkpoint i
+
+    	            if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
+		            {
+		                cP = temp;
+		                lastCP = i;
+		            }
+	        	}
+
             }
         }
     }
@@ -1727,20 +1828,20 @@ public void CalculateFitness(int individual)
     
     float dist;
     
-    for(int i=0; i < lastCP; i++)
+    for(int i=0; i <= lastCP; i++)
     {
         if(i == 0)
         {
             dist += GetVectorDistance(g_fGAStartPos, g_fGACheckPoints[i]);
         }
         else
-            dist += GetVectorDistance(g_fGACheckPoints[i-1], g_fGACheckPoints[i]);
+            dist += GetVectorDistance(g_fGACheckPoints[i - 1], g_fGACheckPoints[i]);
     }
     
-    if(lastCP == 0)
+    if(lastCP < 0)
         dist += GetVectorDistance(g_fGAStartPos, cP);
     else
-        dist += GetVectorDistance(g_fGACheckPoints[lastCP - 1], cP);
+        dist += GetVectorDistance(g_fGACheckPoints[lastCP], cP);
         
     // subtract distance from line
     dist -= GetVectorDistance(cP, playerPos);
@@ -1754,7 +1855,7 @@ public void CalculateFitness(int individual)
 
     if (g_bMadeToEnd)
     {
-    	g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 10;
+    	g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 1000;
     }
 
     g_bMadeToEnd = false;
