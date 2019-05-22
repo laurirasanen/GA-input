@@ -30,7 +30,7 @@ bool g_bMadeToEnd;
 
 int g_iBot = -1;
 int g_iBotTeam = 2;
-int g_iPossibleButtons[8] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_BACK, IN_MOVELEFT, IN_MOVERIGHT, IN_LEFT, IN_RIGHT};
+int g_iPossibleButtons[5] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT};
 int g_iSimIndex;
 int g_iSimCurrentFrame;
 int g_iTargetGen;
@@ -434,12 +434,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             buttons |= IN_RELOAD; // Autoreload
             impulse |= 101;
                 
-            if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
-                vel[0] = 0.0;
-            else if (buttons & IN_FORWARD)
+            if (buttons & IN_FORWARD)
                 vel[0] = 400.0;
-            else if (buttons & IN_BACK)
-                vel[0] = -400.0;
+            else
+                vel[0] = 0.0;
             
             if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
                 vel[1] = 0.0;
@@ -465,12 +463,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         if(client != g_iRecordingClient)
             return Plugin_Continue;
         
-        if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
-            vel[0] = 0.0;
-        else if (buttons & IN_FORWARD)
+        if (buttons & IN_FORWARD)
             vel[0] = 400.0;
-        else if (buttons & IN_BACK)
-            vel[0] = -400.0;
+        else
+            vel[0] = 0.0;
         
         if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
             vel[1] = 0.0;
@@ -511,12 +507,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             {                
                 buttons = StringToInt(butt[0]);
                 
-                if (buttons & (IN_FORWARD|IN_BACK) == IN_FORWARD|IN_BACK)
-                    vel[0] = 0.0;
-                else if (buttons & IN_FORWARD)
+                if (buttons & IN_FORWARD)
                     vel[0] = 400.0;
-                else if (buttons & IN_BACK)
-                    vel[0] = -400.0;
+                else
+                    vel[0] = 0.0;
                 
                 if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
                     vel[1] = 0.0;
@@ -2006,7 +2000,7 @@ public void Breed()
             for(int t=0; t<g_iFrames; t++)
             {            
                 // Get parts from both parents randomly
-                for(int a=0; a<8; a++)
+                for(int a=0; a<5; a++)
                 {
                     int cross = GetRandomInt(0, 1);
                     if(g_iGAIndividualInputsInt[t][parents[p][cross]] & g_iPossibleButtons[a])
