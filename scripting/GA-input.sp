@@ -41,8 +41,6 @@ int g_iStartTime = 200;
 int g_iPlayBackStart = 0;
 int g_iRecordingClient = -1;
 int g_iLeftOverFrames = 0;
-int g_iMutationChance = 10;
-int g_iRotationMutationChance = 300;
 
 float g_fTimeScale = 100.0;
 float g_fStartPos[3];
@@ -56,6 +54,8 @@ float g_fGACheckPoints[MAXCHECKPOINTS][3];
 float g_fTelePos[3] = {0.0, 0.0, 0.0};
 float g_fOverrideFitness;
 float g_fLastPos[3];
+float g_fMutationChance = 0.01;
+float g_fRotationMutationChance = 0.1;
 
 File g_hFile;
 
@@ -191,8 +191,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 }
                 else
                 {
-                	float bestFitness = 0;
+                	float bestFitness = 0.0;
                 	int fittestIndex = 0;
+
             	    for(int i=0; i<POPULATION;i++)
     				{
     					if(g_fGAIndividualFitness[i] > bestFitness)
@@ -224,7 +225,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     
                 if(g_iSimIndex == POPULATION)
                 {
-                	float bestFitness = 0;
+                	float bestFitness = 0.0;
                 	int fittestIndex = 0;
             	    for(int i=0; i<POPULATION;i++)
     				{
@@ -280,7 +281,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     else
                     {
-                    	float bestFitness = 0;
+                    	float bestFitness = 0.0;
 	                	int fittestIndex = 0;
 	            	    for(int i=0; i<POPULATION;i++)
 	    				{
@@ -343,7 +344,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     else
                     {
-                    	float bestFitness = 0;
+                    	float bestFitness = 0.0;
 	                	int fittestIndex = 0;
 	            	    for(int i=0; i<POPULATION;i++)
 	    				{
@@ -1267,9 +1268,9 @@ public Action CmdSetMutationChance(int client, int args)
 
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    int num;
+    float num;
 
-    if(!StringToIntEx(arg, num))
+    if(!StringToFloatEx(arg, num))
     {
         if(client == 0)
             PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
@@ -1278,12 +1279,12 @@ public Action CmdSetMutationChance(int client, int args)
         return Plugin_Handled;
     }
 
-    g_iMutationChance = num;
+    g_fMutationChance = num;
 
     if(client == 0)
-        PrintToServer("%s Mutation chance set to %d", g_cPrintPrefixNoColor, num);
+        PrintToServer("%s Mutation chance set to %f", g_cPrintPrefixNoColor, num);
     else
-        CPrintToChat(client, "%s Mutation chance set to %d", g_cPrintPrefix, num);
+        CPrintToChat(client, "%s Mutation chance set to %f", g_cPrintPrefix, num);
 
     return Plugin_Handled;
 }
@@ -1301,9 +1302,9 @@ public Action CmdSetRotationMutationChance(int client, int args)
 
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    int num;
+    float num;
 
-    if(!StringToIntEx(arg, num))
+    if(!StringToFloatEx(arg, num))
     {
         if(client == 0)
             PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
@@ -1312,12 +1313,12 @@ public Action CmdSetRotationMutationChance(int client, int args)
         return Plugin_Handled;
     }
 
-    g_iRotationMutationChance = num;
+    g_fRotationMutationChance = num;
 
     if(client == 0)
-        PrintToServer("%s Rotation mutation chance set to %d", g_cPrintPrefixNoColor, num);
+        PrintToServer("%s Rotation mutation chance set to %f", g_cPrintPrefixNoColor, num);
     else
-        CPrintToChat(client, "%s Rotation mutation chance set to %d", g_cPrintPrefix, num);
+        CPrintToChat(client, "%s Rotation mutation chance set to %f", g_cPrintPrefix, num);
 
     return Plugin_Handled;
 }
@@ -1643,7 +1644,7 @@ public void GeneratePopulation()
             for(int i=0; i < sizeof(g_iPossibleButtons); i++)
             {
                 // random key inputs
-                if(GetRandomInt(0, 100) < g_iMutationChance)
+                if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                 {
                     if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i])
                         g_iGAIndividualInputsInt[t][p] &= ~g_iPossibleButtons[i];
@@ -1656,7 +1657,7 @@ public void GeneratePopulation()
                 {
                     if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i])
                     {
-                        if(GetRandomInt(0, 100) < 90)
+                        if(GetRandomFloat(0.0, 1.0) < 0.9)
                         {
                             g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                         }                            
@@ -1667,7 +1668,7 @@ public void GeneratePopulation()
             g_fGAIndividualInputsFloat[t][p][1] = g_fGAStartAng[1];
 
             // random mouse movement
-            if(GetRandomInt(0,100) < 95)
+            if(GetRandomFloat(0.0, 1.0) < 0.9)
             {
             	int prevPitch = g_fGAStartAng[0];
             	int prevYaw = g_fGAStartAng[1];
@@ -1701,7 +1702,7 @@ public void GeneratePopulation()
             {
                 for(int a=0; a<2; a++)
                 {
-                    if(GetRandomInt(0, 100) < g_iMutationChance)
+                    if(GetRandomFloat(0.0, 1.0) < 0.9)
                     {
                         g_fGAIndividualInputsFloat[t][p][a] = g_fGAIndividualInputsFloat[t-1][p][a];
                     }                        
@@ -1916,10 +1917,10 @@ public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
     SubtractVectors(P, A, AP);
     float lengthSqrAB = AB[0] * AB[0] + AB[1] * AB[1] + AB[2] * AB[2];
     float t = (AP[0] * AB[0] + AP[1] * AB[1] + AP[2] * AB[2]) / lengthSqrAB;
-    if(t < 0)
-     t = 0;
-    if(t > 1)
-        t = 1;
+    if(t < 0.0)
+     	t = 0.0;
+    if(t > 1.0)
+        t = 1.0;
     ScaleVector(AB, t);
     AddVectors(A, AB, ref);
 }
@@ -2009,7 +2010,7 @@ public void Breed()
                         g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
 
                     // random mutations
-                    if(GetRandomInt(0, 1000) < g_iMutationChance)
+                    if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                     {
                         if(g_iGAIndividualInputsInt[t][i] & g_iPossibleButtons[a])
                             g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
@@ -2025,25 +2026,39 @@ public void Breed()
                 }
 
                 // random mutations
-                if(GetRandomInt(0, 1000) < g_iRotationMutationChance)
+                if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
-                    g_fGAIndividualInputsFloat[t][i][0] += GetRandomFloat(-0.1, 0.1);
+                	float val = GetRandomFloat(-0.1, 0.1);
 
-                    if (g_fGAIndividualInputsFloat[t][i][0] < -89.0)
-                    	g_fGAIndividualInputsFloat[t][i][0] = -89.0;
+                	// Change all future ticks rotation as well
+                	for(int j = t; j < g_iFrames; j++)
+                	{
+	                    g_fGAIndividualInputsFloat[j][i][0] += val;
 
-                	if (g_fGAIndividualInputsFloat[t][i][0] > 89.0)
-                    	g_fGAIndividualInputsFloat[t][i][0] = 89.0;
+	                    if (g_fGAIndividualInputsFloat[j][i][0] < -89.0)
+	                    	g_fGAIndividualInputsFloat[j][i][0] = -89.0;
+
+	                	if (g_fGAIndividualInputsFloat[j][i][0] > 89.0)
+	                    	g_fGAIndividualInputsFloat[j][i][0] = 89.0;
+                	}
+
                 }
-                if(GetRandomInt(0, 1000) < g_iRotationMutationChance)
+                if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
-                    g_fGAIndividualInputsFloat[t][i][1] += GetRandomFloat(-0.1, 0.1);
+                    float val = GetRandomFloat(-0.1, 0.1);
 
-                    if (g_fGAIndividualInputsFloat[t][i][1] < -180.0)
-                    	g_fGAIndividualInputsFloat[t][i][1] += 360.0;
+                	// Change all future ticks rotation as well
+                	for(int j = t; j < g_iFrames; j++)
+                	{
+	                    g_fGAIndividualInputsFloat[j][i][1] += val;
 
-                	if (g_fGAIndividualInputsFloat[t][i][1] > 180.0)
-                    	g_fGAIndividualInputsFloat[t][i][1] -= 360.0;
+                        if (g_fGAIndividualInputsFloat[j][i][1] < -180.0)
+                    		g_fGAIndividualInputsFloat[j][i][1] += 360.0;
+
+	                	if (g_fGAIndividualInputsFloat[j][i][1] > 180.0)
+	                    	g_fGAIndividualInputsFloat[j][i][1] -= 360.0;
+                	}
+
                 }
             }
             g_bGAIndividualMeasured[i] = false;
