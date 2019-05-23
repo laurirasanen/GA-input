@@ -1649,16 +1649,20 @@ public void GeneratePopulation()
                 // random key inputs
                 if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                 {
-                    if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i])
+                    if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
+                    {
                         g_iGAIndividualInputsInt[t][p] &= ~g_iPossibleButtons[i];
+                    }
                     else
+                    {
                         g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
+                    }
                 }
                     
                 // chance for inputs to be duplicated from previous tick
                 if(t != 0)
                 {
-                    if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i])
+                    if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
                         if(GetRandomFloat(0.0, 1.0) < 0.9)
                         {
@@ -2007,18 +2011,26 @@ public void Breed()
                 for(int a=0; a<5; a++)
                 {
                     int cross = GetRandomInt(0, 1);
-                    if(g_iGAIndividualInputsInt[t][parents[p][cross]] & g_iPossibleButtons[a])
-                        g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
+                    if(g_iGAIndividualInputsInt[t][parents[p][cross]] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
+                    {
+                    	g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
+                    }
                     else
-                        g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
+                    {
+                        g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
+                    }
 
                     // random mutations
                     if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                     {
-                        if(g_iGAIndividualInputsInt[t][i] & g_iPossibleButtons[a])
-                            g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
-                        else
+                        if(g_iGAIndividualInputsInt[t][i] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
+                        {
                             g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
+                        }
+                        else
+                        {
+                            g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
+                        }
                     }
                 }
 
