@@ -16,7 +16,7 @@
 // about 10 mins (assuming 66.6/s)
 #define MAXFRAMES 40000
 #define POPULATION 100
-#define LUCKYFEW 10
+#define LUCKYFEW 25
 
 bool g_bRecording;
 bool g_bPlayback;
@@ -55,7 +55,7 @@ float g_fTelePos[3] = {0.0, 0.0, 0.0};
 float g_fOverrideFitness;
 float g_fLastPos[3];
 float g_fMutationChance = 0.01;
-float g_fRotationMutationChance = 0.1;
+float g_fRotationMutationChance = 0.01;
 
 File g_hFile;
 
@@ -166,6 +166,41 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     {
         if(client == g_iBot)
         {
+        	// already measured
+            if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAplayback)
+            {
+                //PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
+                g_iSimIndex++;
+    
+                if(g_iSimIndex == POPULATION)
+                {
+                	float bestFitness = 0.0;
+                	int fittestIndex = 0;
+            	    for(int i=0; i<POPULATION;i++)
+    				{
+    					if(g_fGAIndividualFitness[i] > bestFitness)
+    					{
+    						bestFitness = g_fGAIndividualFitness[i];
+    						fittestIndex = i;
+    					}
+    				}
+
+                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+
+                    g_bSimulating = false;
+                    if(g_iTargetGen > g_iCurrentGen)
+                    {
+						Breed();  
+                    }                        
+                    else
+                    {
+                    	ServerCommand("host_timescale 1");
+                    }               
+                }
+                
+                return Plugin_Continue;
+            }
+
             if(g_iSimCurrentFrame == g_iFrames)
             {
                 g_bSimulating = false;
@@ -175,7 +210,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 if(g_bGAplayback)
                 {
                     g_bGAplayback = false;
-                    g_bSimulating = false;
                     CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
                     int currentTick = GetGameTickCount();
                     PrintToServer("Playback end tick: %d", currentTick);
@@ -214,37 +248,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                         PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
                         ServerCommand("host_timescale 1");
                     }
-                }
-                
-                return Plugin_Continue;
-            }
-            if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAplayback)
-            {
-                //PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
-                g_iSimIndex++;
-    
-                if(g_iSimIndex == POPULATION)
-                {
-                	float bestFitness = 0.0;
-                	int fittestIndex = 0;
-            	    for(int i=0; i<POPULATION;i++)
-    				{
-    					if(g_fGAIndividualFitness[i] > bestFitness)
-    					{
-    						bestFitness = g_fGAIndividualFitness[i];
-    						fittestIndex = i;
-    					}
-    				}
-
-                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
-
-                    g_bSimulating = false;
-                    if(g_iTargetGen > g_iCurrentGen)
-                        Breed();  
-                    else
-                    {
-                    	ServerCommand("host_timescale 1");
-                    }               
                 }
                 
                 return Plugin_Continue;
@@ -1784,7 +1787,6 @@ public void CalculateFitness(int individual)
             {
             	// no cps
                 ClosestPoint(g_fGAEndPos, g_fGAStartPos, playerPos, cP);
-                break;
             }
             else
             {
@@ -1807,8 +1809,9 @@ public void CalculateFitness(int individual)
 		                lastCP = i;
 		            }
 	        	}
-
             }
+
+            break;
         }
     }
     
@@ -1819,7 +1822,7 @@ public void CalculateFitness(int individual)
    
 	CloseHandle(trace);
     
-    //PrintToServer("%s lastCP: %d", g_cPrintPrefixNoColor, lastCP);
+    //PrintToServer("%s individual %d lastCP: %d", g_cPrintPrefixNoColor, individual, lastCP);
     
     float dist;
     
