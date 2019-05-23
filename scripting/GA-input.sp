@@ -420,16 +420,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     return Plugin_Continue;
                 }*/
             }
-            
-            float fAng[3];
-            fAng[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][0];
-            fAng[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][1];
-            fAng[2] = 0.0;
-
-            for(int i = 0; i < 3; i++)
-            {
-            	angles[i] = fAng[i];
-            }
 
             //TeleportEntity(client, NULL_VECTOR, fAng, NULL_VECTOR);
             
@@ -451,6 +441,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 vel[1] = 400.0;
             
             buttons = 0;
+
+            float fAng[3];
+            fAng[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][0];
+            fAng[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][1];
+            fAng[2] = 0.0;
+
+            for(int i = 0; i < 3; i++)
+            {
+            	angles[i] = fAng[i];
+            }
 
             g_iSimCurrentFrame++;        
             
@@ -483,7 +483,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         buttons &= ~IN_ATTACK;
         buttons &= ~IN_ATTACK2;
 
-        g_hFile.WriteLine("%d,%f,%f", buttons, angles[0], angles[1]);
+        g_hFile.WriteLine("%d,%.16f,%.16f", buttons, angles[0], angles[1]);
 
         // Disable button based movement
         buttons = 0;
@@ -504,9 +504,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         char buffer[128];
         if(g_hFile.ReadLine(buffer, sizeof(buffer)))
         {
-            char butt[3][8];
+            char butt[3][18];
             
-            int n = ExplodeString(buffer, ",", butt, 3, 8);
+            int n = ExplodeString(buffer, ",", butt, 3, 18);
             if(n == 3)
             {                
                 buttons = StringToInt(butt[0]);
@@ -591,7 +591,7 @@ public Action CmdRecord(int client, int args)
         PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
-    g_hFile.WriteLine("%f,%f,%f,%f,%f", g_fStartPos[0], g_fStartPos[1], g_fStartPos[2], g_fStartAng[0], g_fStartAng[1]);
+    g_hFile.WriteLine("%.16f,%.16f,%.16f,%.16f,%.16f", g_fStartPos[0], g_fStartPos[1], g_fStartPos[2], g_fStartAng[0], g_fStartAng[1]);
     
     g_bRecording = true;
     g_bPlayback = false;
@@ -659,8 +659,8 @@ public Action CmdPlayback(int client, int args)
     char buffer[128];
     if(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
-        char bu[5][16];
-        int n = ExplodeString(buffer, ",", bu, 5, 16);
+        char bu[5][18];
+        int n = ExplodeString(buffer, ",", bu, 5, 18);
         
         if(n == 5)
         {
@@ -781,7 +781,7 @@ public Action CmdSaveGen(int client, int args)
         }
         for(int f=0; f < g_iFrames; f++)
         {
-            g_hFile.WriteLine("%d,%f,%f", g_iGAIndividualInputsInt[f][i], g_fGAIndividualInputsFloat[f][i][0], g_fGAIndividualInputsFloat[f][i][1]);
+            g_hFile.WriteLine("%d,%.16f,%.16f", g_iGAIndividualInputsInt[f][i], g_fGAIndividualInputsFloat[f][i][0], g_fGAIndividualInputsFloat[f][i][1]);
         }
         
         g_hFile.Close();    
@@ -840,8 +840,8 @@ public Action CmdLoadGen(int client, int args)
         char buffer[128];
         while(g_hFile.ReadLine(buffer, sizeof(buffer)))
         {
-            char bu[3][16];
-            int n = ExplodeString(buffer, ",", bu, 3, 16);
+            char bu[3][18];
+            int n = ExplodeString(buffer, ",", bu, 3, 18);
             
             if(n == 3)
             {
@@ -936,8 +936,8 @@ public Action CmdLoadGenFromRec(int client, int args)
 
         while(g_hFile.ReadLine(buffer, sizeof(buffer)))
         {
-            char bu[3][16];
-            int n = ExplodeString(buffer, ",", bu, 3, 16);
+            char bu[3][18];
+            int n = ExplodeString(buffer, ",", bu, 3, 18);
             
             if(n == 3)
             {
@@ -1030,11 +1030,11 @@ public Action CmdSave(int client, int args)
         return Plugin_Handled;
     }
     g_hFile.WriteLine("%d", g_iFrames);
-    g_hFile.WriteLine("%f,%f,%f,%f,%f,%f,%f,%f,%f", g_fGAStartPos[0], g_fGAStartPos[1], g_fGAStartPos[2], g_fGAStartAng[0], g_fGAStartAng[1], g_fGAStartAng[2], g_fGAEndPos[0], g_fGAEndPos[1], g_fGAEndPos[2]);
+    g_hFile.WriteLine("%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f", g_fGAStartPos[0], g_fGAStartPos[1], g_fGAStartPos[2], g_fGAStartAng[0], g_fGAStartAng[1], g_fGAStartAng[2], g_fGAEndPos[0], g_fGAEndPos[1], g_fGAEndPos[2]);
     for(int i = 0; i<MAXCHECKPOINTS; i++)
     {
         if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
-            g_hFile.WriteLine("%f,%f,%f", g_fGACheckPoints[i][0], g_fGACheckPoints[i][1], g_fGACheckPoints[i][2]);
+            g_hFile.WriteLine("%.16f,%.16f,%.16f", g_fGACheckPoints[i][0], g_fGACheckPoints[i][1], g_fGACheckPoints[i][2]);
     }
     g_hFile.Close();    
     if(client == 0)
@@ -1082,7 +1082,7 @@ public Action CmdLoad(int client, int args)
     }
     g_hFile.Seek(0, SEEK_SET);
     
-    char buffer[128];
+    char buffer[256];
     if(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
         int num;
@@ -1103,8 +1103,8 @@ public Action CmdLoad(int client, int args)
     }
     if(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
-        char bu[9][16];
-        int n = ExplodeString(buffer, ",", bu, 9, 16);
+        char bu[9][18];
+        int n = ExplodeString(buffer, ",", bu, 9, 18);
         
         if(n == 9)
         {
@@ -1139,8 +1139,8 @@ public Action CmdLoad(int client, int args)
     int cp;
     while(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
-        char bu[3][16];
-        int n = ExplodeString(buffer, ",", bu, 3, 16);
+        char bu[3][18];
+        int n = ExplodeString(buffer, ",", bu, 3, 18);
         
         if(n == 3)
         {
