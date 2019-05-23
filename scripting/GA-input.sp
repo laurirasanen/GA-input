@@ -1651,10 +1651,12 @@ public void GeneratePopulation()
                 {
                     if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
+                    	// has button, remove
                         g_iGAIndividualInputsInt[t][p] &= ~g_iPossibleButtons[i];
                     }
                     else
                     {
+                    	// doesn't have button, add
                         g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                     }
                 }
@@ -1664,8 +1666,10 @@ public void GeneratePopulation()
                 {
                     if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
+                    	// previous tick has button
                         if(GetRandomFloat(0.0, 1.0) < 0.9)
                         {
+                        	// add to this
                             g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                         }                            
                     }
@@ -2013,11 +2017,13 @@ public void Breed()
                     int cross = GetRandomInt(0, 1);
                     if(g_iGAIndividualInputsInt[t][parents[p][cross]] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
                     {
-                    	g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
+                    	// parent has button, add to this
+                    	g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
                     }
                     else
                     {
-                        g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
+                    	// parent does not have button, remove from this
+                        g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
                     }
 
                     // random mutations
@@ -2025,10 +2031,12 @@ public void Breed()
                     {
                         if(g_iGAIndividualInputsInt[t][i] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
                         {
+                        	// has button, remove
                             g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
                         }
                         else
-                        {
+                        {                            
+                        	// doesn't have button, add
                             g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
                         }
                     }
@@ -2044,6 +2052,7 @@ public void Breed()
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
                 	float val = GetRandomFloat(-0.1, 0.1);
+                	//g_fGAIndividualInputsFloat[t][i][0] += val;
 
                 	// Change all future ticks rotation as well
                 	for(int j = t; j < g_iFrames; j++)
@@ -2061,6 +2070,7 @@ public void Breed()
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
                     float val = GetRandomFloat(-0.1, 0.1);
+                    //g_fGAIndividualInputsFloat[t][i][1] += val;
 
                 	// Change all future ticks rotation as well
                 	for(int j = t; j < g_iFrames; j++)
