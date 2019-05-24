@@ -15,8 +15,8 @@
 #define MAXCHECKPOINTS 100
 // about 10 mins (assuming 66.6/s)
 #define MAXFRAMES 40000
-#define POPULATION 100
-#define LUCKYFEW 25
+#define POPULATION 48
+#define LUCKYFEW 2
 
 bool g_bRecording;
 bool g_bPlayback;
@@ -911,25 +911,45 @@ public Action CmdLoadGenFromRec(int client, int args)
     char path[64] = "/GA/rec/";
     StrCat(path, sizeof(path), arg);
 
-    g_hFile = OpenFile(path, "r");
-
-    if(g_hFile == INVALID_HANDLE)
-    {
-        if(client == 0)
-        {
-            PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
-            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-            return Plugin_Handled;
-        }
-        CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-        PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-        return Plugin_Handled;
-    }
-
     int frames = 0;
+    int iFrameCounts[POPULATION / 2];
+    int iLastLoaded = 0;
 
-    for(int i=0; i < POPULATION; i++)
+    for(int i=0; i < POPULATION / 2; i++)
     {
+    	char individualPath[64];
+    	strcopy(individualPath, sizeof(individualPath), path);
+    	char index[8];
+
+    	if(i != 0)
+    	{
+    		IntToString(i, index, sizeof(index));
+    		StrCat(individualPath, sizeof(individualPath), index);
+    	}
+
+	    g_hFile = OpenFile(individualPath, "r");
+
+	    if(g_hFile == INVALID_HANDLE)
+	    {
+	    	if (i == 0)
+	    	{
+		        if(client == 0)
+		        {
+		            PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+		            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+		            return Plugin_Handled;
+		        }
+		        CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+		        PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+		        return Plugin_Handled;
+	    	}
+	    	else
+	    	{
+	    		// reached last file
+	    		break;
+	    	}
+	    }
+
         g_hFile.Seek(0, SEEK_SET);
         char buffer[128];
         int f = 0;
@@ -960,19 +980,22 @@ public Action CmdLoadGenFromRec(int client, int args)
         	f++;
         }
 
-        if (i == 0)
+        if (f > frames)
         {
         	frames = f;
         }
-    }
 
-    g_hFile.Close(); 
+        iFrameCounts[i] = f;
+        iLastLoaded = i;
+
+        g_hFile.Close(); 
+    }    
 
     g_bPopulation = true;
     if(client == 0)
-        PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, path);
+        PrintToServer("%s Loaded %d recordings from %s", g_cPrintPrefixNoColor, iLastLoaded + 1, path);
     else
-        CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, path);
+        CPrintToChat(client, "%s Loaded %d recordings from %s", g_cPrintPrefix, iLastLoaded + 1, path);
 
     // set frame count
     if(frames > MAXFRAMES)
@@ -990,7 +1013,103 @@ public Action CmdLoadGenFromRec(int client, int args)
     else
         CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
 
+    // Pad other runs to match longest one
+    for(int i = 0; i < iLastLoaded; i++)
+    {
+    	if(iFrameCounts[i] < frames)
+    	{
+    		Pad(i, iFrameCounts[i]);
+    	}
+    }
+
+    // generate rest of Population
+    GeneratePopulation(iLastLoaded + 1);
+
     return Plugin_Handled;
+}
+
+public void Pad(int individual, int startFrame)
+{
+	PrintToServer("Padding %d by %d frames", individual, g_iFrames - startFrame);
+	
+	for(int t=startFrame; t < g_iFrames; t++)
+    {
+        for(int i=0; i < sizeof(g_iPossibleButtons); i++)
+        {
+            // random key inputs
+            if(GetRandomFloat(0.0, 1.0) < 0.5)
+            {
+                if(g_iGAIndividualInputsInt[t][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
+                {
+                	// has button, remove
+                    g_iGAIndividualInputsInt[t][individual] &= ~g_iPossibleButtons[i];
+                }
+                else
+                {
+                	// doesn't have button, add
+                    g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
+                }
+            }
+                
+            // chance for inputs to be duplicated from previous tick
+            if(t != 0)
+            {
+                if(g_iGAIndividualInputsInt[t-1][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
+                {
+                	// previous tick has button
+                    if(GetRandomFloat(0.0, 1.0) < 0.9)
+                    {
+                    	// add to this
+                        g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
+                    }                            
+                }
+            }
+        }
+        g_fGAIndividualInputsFloat[t][individual][0] = g_fGAStartAng[0];
+        g_fGAIndividualInputsFloat[t][individual][1] = g_fGAStartAng[1];
+
+        // random mouse movement
+        if(GetRandomFloat(0.0, 1.0) < 0.9)
+        {
+        	int prevPitch = g_fGAStartAng[0];
+        	int prevYaw = g_fGAStartAng[1];
+
+        	if (t > 0)
+        	{
+        		prevPitch = g_fGAIndividualInputsFloat[t - 1][individual][0];
+        		prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
+        	}
+
+            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
+
+            if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
+            	g_fGAIndividualInputsFloat[t][individual][0] = -89.0;
+
+        	if (g_fGAIndividualInputsFloat[t][individual][0] > 89.0)
+            	g_fGAIndividualInputsFloat[t][individual][0] = 89.0;
+
+
+            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
+
+            if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
+            	g_fGAIndividualInputsFloat[t][individual][1] += 360.0;
+
+        	if (g_fGAIndividualInputsFloat[t][individual][1] > 180.0)
+            	g_fGAIndividualInputsFloat[t][individual][1] -= 360.0;
+        }
+        
+        // chance for inputs to be duplicated from previous tick
+        if(t != 0)
+        {
+            for(int a=0; a<2; a++)
+            {
+                if(GetRandomFloat(0.0, 1.0) < 0.9)
+                {
+                    g_fGAIndividualInputsFloat[t][individual][a] = g_fGAIndividualInputsFloat[t-1][individual][a];
+                }                        
+            }
+        }
+    }	
 }
 
 public Action CmdSave(int client, int args)
@@ -1636,13 +1755,13 @@ public void HideLines() {
     }
 }
 
-public void GeneratePopulation()
+void GeneratePopulation(int iStartIndex = 0)
 {
 	ServerCommand("host_timescale 1");
 
     for(int t=0; t < g_iFrames; t++)
     {
-        for(int p=0; p < POPULATION; p++)
+        for(int p=iStartIndex; p < POPULATION; p++)
         {
             for(int i=0; i < sizeof(g_iPossibleButtons); i++)
             {
