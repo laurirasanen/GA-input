@@ -62,6 +62,7 @@ File g_hFile;
 char g_cBotName[] = "GA-BOT";
 char g_cPrintPrefix[] = "[{orange}GA{default}]";
 char g_cPrintPrefixNoColor[] = "[GA]";
+char g_cLastRecord[64];
 
 public Plugin myinfo =
 {
@@ -77,6 +78,7 @@ public void OnPluginStart()
     // testing cmds
     RegConsoleCmd("ga_record", CmdRecord, "");
     RegConsoleCmd("ga_stoprecord", CmdStopRecord, "");
+    RegConsoleCmd("ga_removerecord", CmdRemoveRecord, "");
     RegConsoleCmd("ga_playback", CmdPlayback, "");
     RegConsoleCmd("ga_stopplayback", CmdStopPlayback, "");
     
@@ -103,6 +105,7 @@ public void OnPluginStart()
     
     // debug
     RegConsoleCmd("ga_debug", CmdDebug, "");
+    RegConsoleCmd("ga_fitness", CmdFitness, "");
 
     // playback
     RegConsoleCmd("ga_play", CmdPlay, "");
@@ -569,29 +572,31 @@ public Action CmdRecord(int client, int args)
     GetCmdArg(1, arg, sizeof(arg));
     char path[64] = "/GA/rec/";
     StrCat(path, sizeof(path), arg);
+
+    g_cLastRecord = "";
+    StrCat(g_cLastRecord, sizeof(g_cLastRecord), arg);
     
     int e=0;
     while(FileExists(path))
     {
         e++;
-        path = "GA/rec/";
+        path = "/GA/rec/";
         StrCat(path, sizeof(path), arg);
         char num[8];
         IntToString(e, num, sizeof(num));
         StrCat(path, sizeof(path), num);
+
+        g_cLastRecord = "";
+        StrCat(g_cLastRecord, sizeof(g_cLastRecord), arg);
+        StrCat(g_cLastRecord, sizeof(g_cLastRecord), num);
     }
     
-    GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fStartPos);
-    GetClientEyeAngles(client, g_fStartAng);
-    
+    //GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fStartPos);
+    //GetClientEyeAngles(client, g_fStartAng);
+    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
+
     g_hFile = OpenFile(path, "w+");
-    if(g_hFile == INVALID_HANDLE)
-    {
-        CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-        PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
-        return Plugin_Handled;
-    }
-    g_hFile.WriteLine("%.16f,%.16f,%.16f,%.16f,%.16f", g_fStartPos[0], g_fStartPos[1], g_fStartPos[2], g_fStartAng[0], g_fStartAng[1]);
+
     
     g_bRecording = true;
     g_bPlayback = false;
@@ -619,6 +624,35 @@ public Action CmdStopRecord(int client, int args)
     g_bPlayback = false;
     g_bSimulating = false;
     CPrintToChat(client, "%s Recording stopped!", g_cPrintPrefix);
+    return Plugin_Handled;
+}
+
+public Action CmdRemoveRecord(int client, int args)
+{
+	char path[64] = "/GA/rec/";
+    StrCat(path, sizeof(path), g_cLastRecord);
+
+    if(strcmp(path, "/GA/rec/", true) == 0)
+    {
+    	PrintToServer("Couldn't find recording %s to delete", path);
+    	return Plugin_Handled;
+    }
+    
+    if(FileExists(path))
+    {
+        if(DeleteFile(path, false))
+        {
+        	PrintToServer("Deleted recording %s", path);
+        }
+        else
+        {
+        	PrintToServer("Failed to delete recording %s", path);
+        }
+    }
+    else
+    {
+    	PrintToServer("Couldn't find recording %s to delete, file doesn't exist", path);
+    }
     return Plugin_Handled;
 }
 
@@ -654,40 +688,8 @@ public Action CmdPlayback(int client, int args)
         PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
-    g_hFile.Seek(0, SEEK_SET);
-    
-    char buffer[128];
-    if(g_hFile.ReadLine(buffer, sizeof(buffer)))
-    {
-        char bu[5][18];
-        int n = ExplodeString(buffer, ",", bu, 5, 18);
-        
-        if(n == 5)
-        {
-            for(int i=0; i<n; i++)
-            {
-                if(strlen(bu[i]) < 1)
-                {
-                    CPrintToChat(client, "%s Starting position not found! Playback cancelled.", g_cPrintPrefix);
-                    g_bPlayback = false;
-                    g_hFile.Close();
-                    return Plugin_Handled;
-                }
-                if(i < 3)
-                    g_fStartPos[i] = StringToFloat(bu[i]);
-                else
-                    g_fStartAng[i-3] = StringToFloat(bu[i]);
-            }
-            TeleportEntity(client, g_fStartPos, g_fStartAng, {0.0, 0.0, 0.0});
-        }
-        else
-        {
-            CPrintToChat(client, "%s Starting position not found! Playback cancelled.", g_cPrintPrefix);
-            g_bPlayback = false;
-            g_hFile.Close();
-            return Plugin_Handled;
-        }
-    }
+
+    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
 
     g_bRecording = false;
     g_bPlayback = true;
@@ -727,6 +729,14 @@ public Action CmdDebug(int client, int args)
        CPrintToChatAll("%s Debug lines hidden", g_cPrintPrefix);
     }
     return Plugin_Handled;
+}
+
+public Action CmdFitness(int client, int args)
+{
+	for(int i = 0; i < POPULATION; i++)
+	{
+		PrintToServer("%s Fitness of individual %d: %f", g_cPrintPrefixNoColor, i, g_fGAIndividualFitness[i]);
+	}
 }
 
 public Action CmdSaveGen(int client, int args)
@@ -912,10 +922,10 @@ public Action CmdLoadGenFromRec(int client, int args)
     StrCat(path, sizeof(path), arg);
 
     int frames = 0;
-    int iFrameCounts[POPULATION / 2];
+    int iFrameCounts[POPULATION];
     int iLastLoaded = 0;
 
-    for(int i=0; i < POPULATION / 2; i++)
+    for(int i=0; i < POPULATION; i++)
     {
     	char individualPath[64];
     	strcopy(individualPath, sizeof(individualPath), path);
@@ -991,7 +1001,6 @@ public Action CmdLoadGenFromRec(int client, int args)
         g_hFile.Close(); 
     }    
 
-    g_bPopulation = true;
     if(client == 0)
         PrintToServer("%s Loaded %d recordings from %s", g_cPrintPrefixNoColor, iLastLoaded + 1, path);
     else
@@ -1023,7 +1032,15 @@ public Action CmdLoadGenFromRec(int client, int args)
     }
 
     // generate rest of Population
-    GeneratePopulation(iLastLoaded + 1);
+    if(iLastLoaded < POPULATION)
+    {
+    	GeneratePopulation(iLastLoaded + 1);
+    }
+    else
+    {
+		g_bPopulation = true;
+		MeasureFitness(0);
+    }    
 
     return Plugin_Handled;
 }
