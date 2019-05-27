@@ -1085,18 +1085,18 @@ public void Pad(int individual, int startFrame)
         g_fGAIndividualInputsFloat[t][individual][0] = g_fGAStartAng[0];
         g_fGAIndividualInputsFloat[t][individual][1] = g_fGAStartAng[1];
 
+    	float prevPitch = g_fGAStartAng[0];
+    	float prevYaw = g_fGAStartAng[1];
+
+    	if (t > 0)
+    	{
+    		prevPitch = g_fGAIndividualInputsFloat[t - 1][individual][0];
+    		prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
+    	}
+
         // random mouse movement
         if(GetRandomFloat(0.0, 1.0) < 0.9)
         {
-        	int prevPitch = g_fGAStartAng[0];
-        	int prevYaw = g_fGAStartAng[1];
-
-        	if (t > 0)
-        	{
-        		prevPitch = g_fGAIndividualInputsFloat[t - 1][individual][0];
-        		prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
-        	}
-
             g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
 
             if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
@@ -1114,17 +1114,10 @@ public void Pad(int individual, int startFrame)
         	if (g_fGAIndividualInputsFloat[t][individual][1] > 180.0)
             	g_fGAIndividualInputsFloat[t][individual][1] -= 360.0;
         }
-        
-        // chance for inputs to be duplicated from previous tick
-        if(t != 0)
+        else
         {
-            for(int a=0; a<2; a++)
-            {
-                if(GetRandomFloat(0.0, 1.0) < 0.9)
-                {
-                    g_fGAIndividualInputsFloat[t][individual][a] = g_fGAIndividualInputsFloat[t-1][individual][a];
-                }                        
-            }
+        	g_fGAIndividualInputsFloat[t][individual][0] = prevPitch;
+        	g_fGAIndividualInputsFloat[t][individual][1] = prevYaw;
         }
     }	
 }
@@ -1776,9 +1769,13 @@ void GeneratePopulation(int iStartIndex = 0)
 {
 	ServerCommand("host_timescale 1");
 
-    for(int t=0; t < g_iFrames; t++)
+    for(int p=iStartIndex; p < POPULATION; p++)
     {
-        for(int p=iStartIndex; p < POPULATION; p++)
+    	// Set initial rotation to start angle
+    	g_fGAIndividualInputsFloat[0][p][0] = g_fGAStartAng[0];
+        g_fGAIndividualInputsFloat[0][p][1] = g_fGAStartAng[1];
+
+        for(int t=0; t < g_iFrames; t++)
         {
             for(int i=0; i < sizeof(g_iPossibleButtons); i++)
             {
@@ -1811,21 +1808,19 @@ void GeneratePopulation(int iStartIndex = 0)
                     }
                 }
             }
-            g_fGAIndividualInputsFloat[t][p][0] = g_fGAStartAng[0];
-            g_fGAIndividualInputsFloat[t][p][1] = g_fGAStartAng[1];
+            
+        	float prevPitch = g_fGAStartAng[0];
+        	float prevYaw = g_fGAStartAng[1];
+
+        	if (t > 0)
+        	{
+        		prevPitch = g_fGAIndividualInputsFloat[t - 1][p][0];
+        		prevYaw = g_fGAIndividualInputsFloat[t - 1][p][1];
+        	}
 
             // random mouse movement
             if(GetRandomFloat(0.0, 1.0) < 0.9)
             {
-            	int prevPitch = g_fGAStartAng[0];
-            	int prevYaw = g_fGAStartAng[1];
-
-            	if (t > 0)
-            	{
-            		prevPitch = g_fGAIndividualInputsFloat[t - 1][p][0];
-            		prevYaw = g_fGAIndividualInputsFloat[t - 1][p][1];
-            	}
-
                 g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
 
                 if (g_fGAIndividualInputsFloat[t][p][0] < -89.0)
@@ -1843,17 +1838,10 @@ void GeneratePopulation(int iStartIndex = 0)
             	if (g_fGAIndividualInputsFloat[t][p][1] > 180.0)
                 	g_fGAIndividualInputsFloat[t][p][1] -= 360.0;
             }
-            
-            // chance for inputs to be duplicated from previous tick
-            if(t != 0)
+            else
             {
-                for(int a=0; a<2; a++)
-                {
-                    if(GetRandomFloat(0.0, 1.0) < 0.9)
-                    {
-                        g_fGAIndividualInputsFloat[t][p][a] = g_fGAIndividualInputsFloat[t-1][p][a];
-                    }                        
-                }
+            	g_fGAIndividualInputsFloat[t][p][0] = prevPitch;
+            	g_fGAIndividualInputsFloat[t][p][1] = prevYaw;
             }
         }
     }
