@@ -15,8 +15,8 @@
 #define MAXCHECKPOINTS 100
 // about 10 mins (assuming 66.6/s)
 #define MAXFRAMES 40000
-#define POPULATION 48
-#define LUCKYFEW 2
+#define POPULATION 200
+#define LUCKYFEW 40
 
 bool g_bRecording;
 bool g_bPlayback;
@@ -56,6 +56,7 @@ float g_fOverrideFitness;
 float g_fLastPos[3];
 float g_fMutationChance = 0.01;
 float g_fRotationMutationChance = 0.01;
+float g_fEndCutoff = 200.0;
 
 File g_hFile;
 
@@ -320,7 +321,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             {
                 float fPos[3];
                 GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
-                if (GetVectorDistance(fPos, g_fGAEndPos) < 500 && fPos[2] > g_fGAEndPos[2])
+                if (GetVectorDistance(fPos, g_fGAEndPos) < g_fEndCutoff && fPos[2] > g_fGAEndPos[2])
                 {
                 	// At end
                 	
@@ -824,6 +825,7 @@ public Action CmdLoadGen(int client, int args)
     StrCat(path, sizeof(path), arg);
     char tPath[64];
     strcopy(tPath, sizeof(tPath), path);
+    int lastLoaded = 0;
     for(int i=0; i < POPULATION; i++)
     {
         path = tPath;
@@ -835,15 +837,19 @@ public Action CmdLoadGen(int client, int args)
         g_hFile = OpenFile(path, "r");
         if(g_hFile == INVALID_HANDLE)
         {
-            if(client == 0)
-            {
-                PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
-                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-                return Plugin_Handled;
-            }
-            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-            return Plugin_Handled;
+        	if(i == 0)
+        	{
+	            if(client == 0)
+	            {
+	                PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+	                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+	                return Plugin_Handled;
+	            }
+	            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+	            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+	            return Plugin_Handled;
+        	}
+        	break;
         }
         int f;
         g_hFile.Seek(0, SEEK_SET);
@@ -874,10 +880,9 @@ public Action CmdLoadGen(int client, int args)
 
         if (f > g_iFrames)
         	g_iFrames = f;
-        g_hFile.Close();    
+        g_hFile.Close();   
+        lastLoaded = i; 
     }
-
-    g_bPopulation = true;
 
     if(g_iFrames > MAXFRAMES)
     {
@@ -888,18 +893,26 @@ public Action CmdLoadGen(int client, int args)
         g_iFrames = MAXFRAMES;
     }  
 
-    if(client == 0)
+    if(lastLoaded + 1 < POPULATION)
     {
-    	PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
-    	PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
-    	PrintToServer("%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+    	GeneratePopulation(lastLoaded + 1);
     }
     else
     {
-    	CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
-		CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
-		CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
-    }              
+    	g_bPopulation = true;
+	    if(client == 0)
+	    {
+	    	PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
+	    	PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
+	    	PrintToServer("%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+	    }
+	    else
+	    {
+	    	CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+			CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
+			CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+	    }    
+    }          
 
     return Plugin_Handled;
 }
