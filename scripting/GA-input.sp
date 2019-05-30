@@ -83,7 +83,7 @@ float g_fGAStartPos[3];                         // Starting position
 float g_fGAStartAng[3];                         // Starting angle
 float g_fGAEndPos[3];                           // End position of fitness line
 float g_fGACheckPoints[MAX_CHECKPOINTS][3];     // Checkpoints of fitness line
-float g_fTelePos[3] = {0.0, 0.0, 0.0};          // Position where individual teleported
+float g_fTelePos[3] = { 0.0, 0.0, 0.0 };        // Position where individual teleported
 float g_fOverrideFitness;                       // Override to use for individual fitness
 float g_fLastPos[3];                            // Position of individual during last tick
 float g_fMutationChance = 0.05;                 // Button mutation chance
@@ -92,7 +92,7 @@ float g_fEndCutoff = 400.0;                     // Distance from end position to
 
 File g_hFile;                                   // File handle
 
-char g_cBotName[] = "GA-BOT";                       // Name of bot
+char g_cBotName[] = "GA-BOT";                       // Name of the bot
 char g_cPrintPrefix[] = "[{orange}GA{default}]";    // Chat prefix for prints
 char g_cPrintPrefixNoColor[] = "[GA]";              // Prefix for server console prints
 char g_cLastRecord[64];                             // Name of last player recording
@@ -707,7 +707,7 @@ public Action CmdRecord(int client, int args)
     }
     
     // Teleport player to start position
-    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, { 0.0, 0.0, 0.0 });
+    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, view_as<float>({ 0.0, 0.0, 0.0 }));
 
     // Set global file handle for writing
     // to file in OnPlayerRunCmd()
@@ -837,7 +837,7 @@ public Action CmdPlayback(int client, int args)
     }
 
     // Teleport client to start position
-    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
+    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, view_as<float>({ 0.0, 0.0, 0.0 }));
 
     g_bRecording = false;
     g_bPlayback = true;
@@ -1581,7 +1581,7 @@ public Action CmdLoadConfig(int client, int args)
     // Reset checkpoints
     for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
-        g_fGACheckPoints[i] = { 0.0, 0.0, 0.0 };
+        g_fGACheckPoints[i] = view_as<float>({ 0.0, 0.0, 0.0 });
     }
 
     // Read any checkpoints
@@ -1903,7 +1903,7 @@ public Action CmdRemoveCheckpoint(int client, int args)
     }
 
     // Remove checkpoint
-    g_fGACheckPoints[iCP] = { 0.0, 0.0, 0.0 };
+    g_fGACheckPoints[iCP] = view_as<float>({ 0.0, 0.0, 0.0 });
 
     // Shift all checkpoints after iCP to new indices 
     for(int i = iCP; i < MAX_CHECKPOINTS; i++)
@@ -1916,7 +1916,7 @@ public Action CmdRemoveCheckpoint(int client, int args)
 
     // Reset last checkpoint
     // Will be a duplicate if all checkpoints are bAssigned before removing one
-    g_fGACheckPoints[MAX_CHECKPOINTS - 1] = { 0.0, 0.0, 0.0 };
+    g_fGACheckPoints[MAX_CHECKPOINTS - 1] = view_as<float>({ 0.0, 0.0, 0.0 });
 
     CPrintToChat(client, "%s Checkpoint %d removed!", g_cPrintPrefix, iCP);
 
@@ -2693,7 +2693,7 @@ public void MeasureFitness(int index)
     }
     
     // Teleport to start
-    TeleportEntity(g_iBot, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
+    TeleportEntity(g_iBot, g_fGAStartPos, g_fGAStartAng, view_as<float>({ 0.0, 0.0, 0.0 }));
 
     // Wait for attack cooldown
     // should probably manually reset it and impulse 101 instead of waiting
