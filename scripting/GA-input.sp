@@ -44,7 +44,6 @@
 bool g_bRecording;
 bool g_bPlayback;
 bool g_bSimulating;
-bool g_bBCExtension;
 bool g_bGAIndividualMeasured[POPULATION_SIZE];
 bool g_bPopulation;
 bool g_bGAplayback;
@@ -87,6 +86,7 @@ char g_cLastRecord[64];
 // ****************************************************************
 // Plugin info
 // ****************************************************************
+// https://sm.alliedmods.net/new-api/core/PluginInfo
 public Plugin myinfo =
 {
     name = "GA-input",
@@ -99,110 +99,150 @@ public Plugin myinfo =
 // ****************************************************************
 // SourceMod callbacks
 // ****************************************************************
+
+// Summary:
+// Called when the plugin is fully initialized and all known external references are resolved
+// https://sm.alliedmods.net/new-api/sourcemod/OnPluginStart
 public void OnPluginStart()
 {
-    // testing cmds
-    RegConsoleCmd("ga_record", CmdRecord, "");
-    RegConsoleCmd("ga_stoprecord", CmdStopRecord, "");
-    RegConsoleCmd("ga_removerecord", CmdRemoveRecord, "");
-    RegConsoleCmd("ga_playback", CmdPlayback, "");
-    RegConsoleCmd("ga_stopplayback", CmdStopPlayback, "");
-    
-    // config
-    RegConsoleCmd("ga_savecfg", CmdSave, "");
-    RegConsoleCmd("ga_loadcfg", CmdLoad, "");
-    RegConsoleCmd("ga_start", CmdStart, "");
-    RegConsoleCmd("ga_end", CmdEnd, "");
-    RegConsoleCmd("ga_addcp", CmdAddCheckpoint, "");
-    RegConsoleCmd("ga_removecp", CmdRemoveCheckpoint, "");
-    
-    // manual
-    RegConsoleCmd("ga_gen", CmdGen, "");
-    RegConsoleCmd("ga_sim", CmdSim, "");
-    RegConsoleCmd("ga_breed", CmdBreed, "");
-    
-    // generation
-    RegConsoleCmd("ga_loop", CmdLoop, "");
-    RegConsoleCmd("ga_stoploop", CmdStopLoop, "");
-    RegConsoleCmd("ga_clear", CmdClear, "");
-    RegConsoleCmd("ga_savegen", CmdSaveGen, "");
-    RegConsoleCmd("ga_loadgen", CmdLoadGen, "");
-    RegConsoleCmd("ga_loadgenfromrec", CmdLoadGenFromRec, "");
-    
-    // debug
-    RegConsoleCmd("ga_debug", CmdDebug, "");
-    RegConsoleCmd("ga_fitness", CmdFitness, "");
+    // ****************************************************************
+    // Console commands
+    // ****************************************************************
 
-    // playback
-    RegConsoleCmd("ga_play", CmdPlay, "");
-    
-    // variables
-    RegConsoleCmd("ga_timescale", CmdSetTimeScale, "");
-    RegConsoleCmd("ga_frames", CmdSetFrames, "");
-    RegConsoleCmd("ga_mutation_chance", CmdSetMutationChance, "");
-    RegConsoleCmd("ga_rotation_mutation_chance", CmdSetRotationMutationChance, "");
+    // Recording commands
+    RegConsoleCmd("ga_record", CmdRecord, "");              // Record player inputs
+    RegConsoleCmd("ga_stoprecord", CmdStopRecord, "");      // Stop recording
+    RegConsoleCmd("ga_removerecord", CmdRemoveRecord, "");  // Remove last recording
 
+    // Playback commands
+    RegConsoleCmd("ga_playback", CmdPlayback, "");          // Play a player recording
+    RegConsoleCmd("ga_stopplayback", CmdStopPlayback, "");  // Stop playback
+    RegConsoleCmd("ga_play", CmdPlay, "");                  // Play a generated individual
+    
+    // Config commands
+    RegConsoleCmd("ga_savecfg", CmdSaveConfig, "");         // Save current config
+    RegConsoleCmd("ga_loadcfg", CmdLoadConfig, "");         // Load a config
+    RegConsoleCmd("ga_start", CmdStart, "");                // Set start location
+    RegConsoleCmd("ga_end", CmdEnd, "");                    // Set end location
+    RegConsoleCmd("ga_addcp", CmdAddCheckpoint, "");        // Add a checkpoint
+    RegConsoleCmd("ga_removecp", CmdRemoveCheckpoint, "");  // Remove a checkpoint
+    RegConsoleCmd("ga_timescale", CmdSetTimeScale, "");     // Set host_timescale for simulations
+    RegConsoleCmd("ga_frames", CmdSetFrames, "");           // Set frame cut-off
+    RegConsoleCmd("ga_mutation_chance", CmdSetMutationChance, "");                  // Set mutation chance for buttons
+    RegConsoleCmd("ga_rotation_mutation_chance", CmdSetRotationMutationChance, ""); // Set mutation chance for rotation
+    
+    // Manual generation commands
+    RegConsoleCmd("ga_gen", CmdGen, "");        // Generate new population
+    RegConsoleCmd("ga_sim", CmdSim, "");        // Simulate current population
+    RegConsoleCmd("ga_breed", CmdBreed, "");    // Breed next generation
+    
+    // Generation commands
+    RegConsoleCmd("ga_loop", CmdLoop, "");                      // Start looping new generations
+    RegConsoleCmd("ga_stoploop", CmdStopLoop, "");              // Stop looping
+    RegConsoleCmd("ga_clear", CmdClear, "");                    // Clear population
+    RegConsoleCmd("ga_savegen", CmdSaveGen, "");                // Save population
+    RegConsoleCmd("ga_loadgen", CmdLoadGen, "");                // Load population
+    RegConsoleCmd("ga_loadgenfromrec", CmdLoadGenFromRec, "");  // Load population from a player recording
+    
+    // Debug commands
+    RegConsoleCmd("ga_debug", CmdDebug, "");        // Draw debug lines in-game
+    RegConsoleCmd("ga_fitness", CmdFitness, "");    // Print fitness of each individual in population
+    
+    // Start a timer for spawning bot
     CreateTimer(1.0, Timer_SetupBot);
+
+    // Set server config
     ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
+
+    // Create required directories
     if(!FileExists("/GA/"))
-        CreateDirectory("/GA/", 557);
+    {
+        CreateDirectory("/GA/", 557);       // Root directory
+    }
     if(!FileExists("/GA/rec/"))
-        CreateDirectory("/GA/rec/", 557);
+    {
+        CreateDirectory("/GA/rec/", 557);   // Recordings directory
+    }
     if(!FileExists("/GA/gen/"))
-        CreateDirectory("/GA/gen/", 557);
+    {
+        CreateDirectory("/GA/gen/", 557);   // Generations directory
+    }
     if(!FileExists("/GA/cfg/"))
-        CreateDirectory("/GA/cfg/", 557);
+    {
+        CreateDirectory("/GA/cfg/", 557);   // Config directory
+    }
 }
 
-public void OnPluginEnd() {    
-    if (g_iBot != -1) {
-        KickClient(g_iBot, "%s", "Kicked GA-BOT");
+// Summary:
+// Called when the plugin is about to be unloaded
+// https://sm.alliedmods.net/new-api/sourcemod/OnPluginEnd
+public void OnPluginEnd()
+{    
+    // Kick bot
+    if (g_iBot != -1)
+    {
+        KickClient(g_iBot, "%s", "OnPluginEnd()");
     }
+
+    // Hide debug lines in-game
     HideLines();
 }
 
-public void OnLibraryAdded(const char[] sName) {
-    if (StrEqual(sName, "botcontroller")) 
-    {
-        g_bBCExtension = true;
-    } 
-}
-
-public void OnAllPluginsLoaded() {
-    g_bBCExtension = LibraryExists("botcontroller");
-}
-
+// Summary:
+// Called when a map is loaded
+// https://sm.alliedmods.net/new-api/sourcemod/OnMapStart
 public void OnMapStart()
 {
+    // Create new bot
     g_iBot = -1;
     CreateTimer(1.0, Timer_SetupBot);
+
+    // Reapply server config
     ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
 }
 
+// Summary:
+// Called right before a map ends
+// https://sm.alliedmods.net/new-api/sourcemod/OnMapEnd
 public void OnMapEnd()
 {
-    if (g_iBot != -1) {
+    // Kick bot
+    if (g_iBot != -1)
+    {
         if(IsClientInGame(g_iBot))
-            KickClient(g_iBot, "%s", "Kicked GA-BOT");
+        {
+            KickClient(g_iBot, "%s", "OnMapEnd()");
+        }
     }
     g_iBot = -1;
+
+    // Hide lines in-game
     HideLines();
 }
 
+// Summary:
+// Called when a clients movement buttons are being processed.
+// Also called for our bot.
+// https://sm.alliedmods.net/new-api/sdktools_hooks/OnPlayerRunCmd
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
+    // ****************************************************************
+    // Handle bot related functionality
+    // ****************************************************************
     if(g_bSimulating)
     {
+        // Make sure client is our bot
         if(client == g_iBot)
         {
-            // already measured
+            // Check if individual in population has already been measured
             if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAplayback)
             {
-                //PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
                 g_iSimIndex++;
-    
+                
+                // Last individual of population
                 if(g_iSimIndex == POPULATION_SIZE)
                 {
+                    // Get best fitness of population
                     float bestFitness = 0.0;
                     int fittestIndex = 0;
                     for(int i = 0; i < POPULATION_SIZE; i++)
@@ -217,6 +257,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
                     g_bSimulating = false;
+
+                    // Continue to the next generation or stop looping
                     if(g_iTargetGen > g_iCurrentGen)
                     {
                         Breed();  
@@ -230,21 +272,23 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 return Plugin_Continue;
             }
 
-            if(g_iSimCurrentFrame == g_iFrames)
+            // Check if we're at the end of this individual
+            if(g_iSimCurrentFrame >= g_iFrames)
             {
                 g_bSimulating = false;
                 g_bGAIndividualMeasured[g_iSimIndex] = true;
 
                 CalculateFitness(g_iSimIndex);
+
+                // Return if playing back instead of measuring
                 if(g_bGAplayback)
                 {
                     g_bGAplayback = false;
                     CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                    int currentTick = GetGameTickCount();
-                    PrintToServer("Playback end tick: %d", currentTick);
-                    PrintToServer("g_iSimCurrentFrame: %d, g_iFrames: %d", g_iSimCurrentFrame, g_iFrames);
                     return Plugin_Continue;
                 }
+
+                // Continue to the next individual if not last of population
                 g_iSimIndex++;
     
                 if(g_iSimIndex < POPULATION_SIZE)
@@ -253,6 +297,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 }
                 else
                 {
+                    // Get best fitness of population
                     float bestFitness = 0.0;
                     int fittestIndex = 0;
 
@@ -267,6 +312,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
                     PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
+                    // Continue to the next generation or stop looping
                     if(g_iTargetGen > g_iCurrentGen)
                     {
                         Breed();
@@ -281,28 +327,37 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 return Plugin_Continue;
             }
             
+            // Not the first frame
             if(g_iSimCurrentFrame != 0)
             {
+                // Get bot's position
                 float fPos[3];
                 GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
+
+                // Check if bot gets teleported
                 if(GetVectorDistance(g_fLastPos, fPos) > 91.0)
                 {
-                    //PrintToServer("last: %f, %f, %f - cur: %f, %f, %f", g_fLastPos[0], g_fLastPos[1], g_fLastPos[2], fPos[0], fPos[1], fPos[2]);
-                    // teleported
+                    // If moved over 91 units since last tick, assume teleported
+                    // Max velocity is 3500u/s on all 3 axes,
+                    // sqrt(sqrt(3500^2 + 3500^2)^2 + 3500^2) ~ 91
+
                     g_bSimulating = false;
-                    // uncomment to prevent parents of new generations from being measured again (faster), sometimes non-deterministic dunno why
                     g_bGAIndividualMeasured[g_iSimIndex] = true;
+                    // Set last position of bot before teleporting
+                    // for fitness calculation
                     g_fTelePos = g_fLastPos;
                     CalculateFitness(g_iSimIndex);
+
+                    // Return if playing back instead of measuring
                     if(g_bGAplayback)
                     {
                         g_bGAplayback = false;
                         g_bSimulating = false;
-                        int currentTick = GetGameTickCount();
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                        PrintToServer("Playback end tick: %d", currentTick);
                         return Plugin_Continue;
                     }
+
+                    // Continue to the next individual if not last of population
                     g_iSimIndex++;
         
                     if(g_iSimIndex < POPULATION_SIZE)
@@ -311,6 +366,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     else
                     {
+                        // Get best fitness of population
                         float bestFitness = 0.0;
                         int fittestIndex = 0;
                         for(int i = 0; i < POPULATION_SIZE; i++)
@@ -324,6 +380,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
                         PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
+                        // Continue to the next generation or stop looping
                         if(g_iTargetGen > g_iCurrentGen)
                         {
                             Breed();
@@ -338,29 +395,30 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     return Plugin_Continue;
                 }
 
+                // Check if bot is close enough to the end position
+                // (within cutoff distance and above the end point
+                // to prevent finishing through floors and such)
                 if (GetVectorDistance(fPos, g_fGAEndPos) < g_fEndCutoff && fPos[2] > g_fGAEndPos[2])
                 {
-                    // At end
-                    // stop generation
-                    //g_iTargetGen = g_iCurrentGen;
-
                     g_bSimulating = false;
                     g_bGAIndividualMeasured[g_iSimIndex] = true;
                     g_bMadeToEnd = true;
+                    // Set amount of frames saved from cutoff limit
                     g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
                     CalculateFitness(g_iSimIndex);
 
                     PrintToServer("%d reached the end in %d frames! (%f)", g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
 
+                    // Return if playing back instead of measuring
                     if(g_bGAplayback)
                     {
                         g_bGAplayback = false;
                         g_bSimulating = false;
-                        int currentTick = GetGameTickCount();
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                        PrintToServer("Playback end tick: %d", currentTick);
                         return Plugin_Continue;
                     }
+
+                    // Continue to the next individual if not last of population
                     g_iSimIndex++;
         
                     if(g_iSimIndex < POPULATION_SIZE)
@@ -369,6 +427,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
                     else
                     {
+                        // Get best fitness of population
                         float bestFitness = 0.0;
                         int fittestIndex = 0;
                         for(int i = 0; i < POPULATION_SIZE; i++)
@@ -382,6 +441,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
                         PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
+                        // Continue to the next generation or stop looping
                         if(g_iTargetGen > g_iCurrentGen)
                         {
                             Breed();
@@ -395,131 +455,181 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     
                     return Plugin_Continue;
                 }
+
+                // Save last position
+                g_fLastPos = fPos;
             }
-            GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fLastPos);
             
+            // Get buttons for current frame
             buttons = g_iGAIndividualInputsInt[g_iSimCurrentFrame][g_iSimIndex];
             
-            buttons |= IN_RELOAD; // Autoreload
+            // Add impulse 101 to refill health and ammo
             impulse |= 101;
-                
+            
+            // Buttons don't do anything for the bot,
+            // set desired velocity manually based on buttons.
+            // Desired velocity still gets capped by class max movement speed,
+            // use 400 to cover max movement speed of all classes.
             if (buttons & IN_FORWARD)
+            {
                 vel[0] = 400.0;
+            }
             else
+            {
                 vel[0] = 0.0;
+            }
             
             if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
+            {
                 vel[1] = 0.0;
+            }
             else if (buttons & IN_MOVELEFT)
+            {
                 vel[1] = -400.0;
+            }
             else if (buttons & IN_MOVERIGHT)
+            {
                 vel[1] = 400.0;
+            }
             
+            // Reset buttons to prevent jumping and ducking for now..
             buttons = 0;
 
-            float fAng[3];
-            fAng[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][0];
-            fAng[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][1];
-            fAng[2] = 0.0;
+            // Get angles for current frame
+            angles[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][0];
+            angles[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][1];
+            angles[2] = 0.0;
 
-            for(int i = 0; i < 3; i++)
-            {
-                angles[i] = fAng[i];
-            }
-
+            // Increment frame
             g_iSimCurrentFrame++;        
             
             return Plugin_Changed;
-        }
-        
+        }        
     }
-    if(g_hFile == null)
+
+    // ****************************************************************
+    // Handle player related functionality
+    // ****************************************************************    
+    if(g_hFile != null)
     {
-        return Plugin_Continue;
-    }
-    if(g_bRecording)
-    {
-        if(client != g_iRecordingClient)
-            return Plugin_Continue;
-        
-        if (buttons & IN_FORWARD)
-            vel[0] = 400.0;
-        else
-            vel[0] = 0.0;
-        
-        if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
-            vel[1] = 0.0;
-        else if (buttons & IN_MOVELEFT)
-            vel[1] = -400.0;
-        else if (buttons & IN_MOVERIGHT)
-            vel[1] = 400.0;
-
-        // disable attack
-        buttons &= ~IN_ATTACK;
-        buttons &= ~IN_ATTACK2;
-
-        g_hFile.WriteLine("%d,%.16f,%.16f", buttons, angles[0], angles[1]);
-
-        // Disable button based movement
-        buttons = 0;
-
-        return Plugin_Changed;
-    }
-    else if(g_bPlayback)
-    {
-        if(client != g_iRecordingClient)
-            return Plugin_Continue;
-            
-        if(g_hFile.EndOfFile())
+        // Handle player recording inputs
+        if(g_bRecording)
         {
-            StopPlayback();
-            return Plugin_Continue;
-        }
-        
-        char buffer[128];
-        if(g_hFile.ReadLine(buffer, sizeof(buffer)))
-        {
-            char butt[3][18];
+            // Make sure client is the one recording
+            if(client != g_iRecordingClient)
+            {
+                return Plugin_Continue;
+            }
             
-            int n = ExplodeString(buffer, ",", butt, 3, 18);
-            if(n == 3)
-            {                
-                buttons = StringToInt(butt[0]);
-                
-                if (buttons & IN_FORWARD)
-                    vel[0] = 400.0;
-                else
-                    vel[0] = 0.0;
-                
-                if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
-                    vel[1] = 0.0;
-                else if (buttons & IN_MOVELEFT)
-                    vel[1] = -400.0;
-                else if (buttons & IN_MOVERIGHT)
-                    vel[1] = 400.0;
-
-                buttons = 0;
-
-                float fAng[3];
-                fAng[0] = StringToFloat(butt[1]);
-                fAng[1] = StringToFloat(butt[2]);
-                fAng[2] = 0.0;
-
-                for(int i = 0; i < 3; i++)
-                {
-                    angles[i] = fAng[i];
-                }
-
-                return Plugin_Changed;
+            // Use same movement method as the bot for consistency
+            if (buttons & IN_FORWARD)
+            {
+                vel[0] = 400.0;
             }
             else
             {
-                PrintToServer("%s Bad input format", g_cPrintPrefixNoColor);
+                vel[0] = 0.0;
+            }
+            
+            if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT)
+            {
+                vel[1] = 0.0;
+            }
+            else if (buttons & IN_MOVELEFT)
+            {
+                vel[1] = -400.0;
+            }
+            else if (buttons & IN_MOVERIGHT)
+            {
+                vel[1] = 400.0;
+            }
+
+            // Disable attack
+            buttons &= ~IN_ATTACK;
+            buttons &= ~IN_ATTACK2;
+
+            // Write buttons and angles to file
+            g_hFile.WriteLine("%d,%.16f,%.16f", buttons, angles[0], angles[1]);
+
+            // Disable button based movement
+            buttons = 0;
+
+            return Plugin_Changed;
+        }
+
+        // Handle playing back a player recording
+        if(g_bPlayback)
+        {
+            // Make sure client is the last one recording
+            if(client != g_iRecordingClient)
+            {
+                return Plugin_Continue;
+            }
+                
+            // Stop playback at end of file
+            if(g_hFile.EndOfFile())
+            {
                 StopPlayback();
                 return Plugin_Continue;
             }
+            
+            // Read from file to buffer
+            char buffer[128];
+            if(g_hFile.ReadLine(buffer, sizeof(buffer)))
+            {
+                // Split line to seperate strings
+                char butt[3][18];                
+                int n = ExplodeString(buffer, ",", butt, 3, 18);
+
+                // Make sure we have correct number of strings
+                if(n == 3)
+                {                
+                    // Parse buttons
+                    buttons = StringToInt(butt[0]);
+                    
+                    // Use same movement method as the bot for consistency
+                    if (buttons & IN_FORWARD)
+                    {
+                        vel[0] = 400.0;
+                    }
+                    else
+                    {
+                        vel[0] = 0.0;
+                    }
+                    
+                    if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
+                    {
+                        vel[1] = 0.0;
+                    }
+                    else if (buttons & IN_MOVELEFT)
+                    {
+                        vel[1] = -400.0;
+                    }
+                    else if (buttons & IN_MOVERIGHT)
+                    {
+                        vel[1] = 400.0;
+                    }
+
+                    // Disable button based movement
+                    buttons = 0;
+
+                    // Parse angles
+                    angles[0] = StringToFloat(butt[1]);
+                    angles[1] = StringToFloat(butt[2]);
+                    angles[2] = 0.0;
+
+                    return Plugin_Changed;
+                }
+                else
+                {
+                    PrintToServer("%s Bad input format", g_cPrintPrefixNoColor);
+                    StopPlayback();
+                    return Plugin_Continue;
+                }
+            }
         }
     }
+    
     return Plugin_Continue;
 }
 
@@ -527,6 +637,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 // Commands
 // ****************************************************************
 
+// Summary:
+// Handle player recording command
 public Action CmdRecord(int client, int args)
 {
     if(client == 0)
@@ -534,51 +646,71 @@ public Action CmdRecord(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
     if(g_bRecording)
     {
         CPrintToChat(client, "%s Already recording!", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
     if(args < 1)
     {
-        CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        CPrintToChat(client, "%s Missing recording name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    // Get recording name from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/GA/rec/";
-    StrCat(path, sizeof(path), arg);
 
+    // Append name to recording path
+    char cPath[64] = "/GA/rec/";
+    StrCat(cPath, sizeof(cPath), arg);
+
+    // Set global variable for last recording 
     g_cLastRecord = "";
     StrCat(g_cLastRecord, sizeof(g_cLastRecord), arg);
     
+    // Increment file path if name already exists
     int i = 0;
-    while(FileExists(path))
+    while(FileExists(cPath))
     {
         i++;
-        path = "/GA/rec/";
-        StrCat(path, sizeof(path), arg);
+
+        // Append name to recording path
+        cPath = "/GA/rec/";
+        StrCat(path, sizeof(cPath), arg);
+
+        // Append index to recording path
         char num[8];
         IntToString(i, num, sizeof(num));
-        StrCat(path, sizeof(path), num);
+        StrCat(cPath, sizeof(cPath), num);
 
+        // Set global variable for last recording 
         g_cLastRecord = "";
         StrCat(g_cLastRecord, sizeof(g_cLastRecord), arg);
         StrCat(g_cLastRecord, sizeof(g_cLastRecord), num);
     }
     
+    // Teleport player to start position
     TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, { 0.0, 0.0, 0.0 });
 
-    g_hFile = OpenFile(path, "w+");
+    // Set global file handle for writing
+    // to file in OnPlayerRunCmd()
+    g_hFile = OpenFile(cPath, "w+");
     
     g_bRecording = true;
     g_bPlayback = false;
     g_bSimulating = false;
-    CPrintToChat(client, "%s Recording started!", g_cPrintPrefix);
     g_iRecordingClient = client;
+
+    CPrintToChat(client, "%s Recording started!", g_cPrintPrefix);    
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle recording stop command
 public Action CmdStopRecord(int client, int args)
 {
     if(client == 0)
@@ -586,49 +718,71 @@ public Action CmdStopRecord(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
     if(!g_bRecording)
     {
         CPrintToChat(client, "%s Not recording!", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    if(g_iRecordingClient != client)
+    {
+        CPrintToChat(client, "%s Someone else is recording!", g_cPrintPrefix)
+        return Plugin_Handled;
+    }
+
     if(g_hFile != null)
+    {
         g_hFile.Close();
+    }
+
     g_bRecording = false;
     g_bPlayback = false;
     g_bSimulating = false;
+
     CPrintToChat(client, "%s Recording stopped!", g_cPrintPrefix);
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle remove record command
 public Action CmdRemoveRecord(int client, int args)
 {
-    char path[64] = "/GA/rec/";
-    StrCat(path, sizeof(path), g_cLastRecord);
+    // Append last recording name to path
+    char cPath[64] = "/GA/rec/";
+    StrCat(cPath, sizeof(cPath), g_cLastRecord);
 
-    if(strcmp(path, "/GA/rec/", true) == 0)
+    // Make sure that last record name is not empty
+    // (compare path to recording root directory)
+    if(strcmp(cPath, "/GA/rec/", true) == 0)
     {
-        PrintToServer("Couldn't find recording %s to delete", path);
+        PrintToServer("Couldn't find recording %s to delete", cPath);
         return Plugin_Handled;
     }
     
-    if(FileExists(path))
+    // Make sure file exists
+    if(FileExists(cPath))
     {
-        if(DeleteFile(path, false))
+        if(DeleteFile(cPath, false))
         {
-            PrintToServer("Deleted recording %s", path);
+            PrintToServer("Deleted recording %s", cPath);
         }
         else
         {
-            PrintToServer("Failed to delete recording %s", path);
+            PrintToServer("Failed to delete recording %s", cPath);
         }
     }
     else
     {
-        PrintToServer("Couldn't find recording %s to delete, file doesn't exist", path);
+        PrintToServer("Couldn't find recording %s to delete, file doesn't exist", cPath);
     }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle player recording playback command
 public Action CmdPlayback(int client, int args)
 {
     if(client == 0)
@@ -636,18 +790,23 @@ public Action CmdPlayback(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
     
+    // Append recording name to path
     char arg[64], target[64] = "/GA/rec/";
     GetCmdArg(1, arg, sizeof(arg));
     StrCat(target, sizeof(target), arg);
     
+    // Make sure recording exists
     if(FileExists(target))
     {
+        // Set global file handle for reading
+        // from file in OnPlayerRunCmd()
         g_hFile = OpenFile(target, "r");
     }
     else
@@ -655,6 +814,7 @@ public Action CmdPlayback(int client, int args)
         CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
         return Plugin_Handled;
     }
+
     if(g_hFile == null)
     {
         CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
@@ -662,16 +822,21 @@ public Action CmdPlayback(int client, int args)
         return Plugin_Handled;
     }
 
+    // Teleport client to start position
     TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
 
     g_bRecording = false;
     g_bPlayback = true;
     g_bSimulating = false;
-    CPrintToChat(client, "%s Playback started!", g_cPrintPrefix);
     g_iRecordingClient = client;
+
+    CPrintToChat(client, "%s Playback started!", g_cPrintPrefix);
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle playback stop command
 public Action CmdStopPlayback(int client, int args)
 {
     if(client == 0)
@@ -679,18 +844,30 @@ public Action CmdStopPlayback(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
     if(!g_bPlayback)
     {
         CPrintToChat(client, "%s No g_bPlayback active!", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    if(g_iRecordingClient != client)
+    {
+        CPrintToChat(client, "%s Someone else is using playback!", g_cPrintPrefix);
+        return Plugin_Handled;
+    }
+
     StopPlayback();
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle drawing debug lines command
 public Action CmdDebug(int client, int args)
 {
     g_bDraw = !g_bDraw;
+
     if(g_bDraw)
     {
         DrawLines();
@@ -701,9 +878,12 @@ public Action CmdDebug(int client, int args)
        HideLines();
        CPrintToChatAll("%s Debug lines hidden", g_cPrintPrefix);
     }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle fitness print command
 public Action CmdFitness(int client, int args)
 {
     for(int i = 0; i < POPULATION_SIZE; i++)
@@ -712,6 +892,8 @@ public Action CmdFitness(int client, int args)
     }
 }
 
+// Summary:
+// Handle population save command
 public Action CmdSaveGen(int client, int args)
 {
     if(args < 1)
@@ -721,35 +903,58 @@ public Action CmdSaveGen(int client, int args)
             PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
             return Plugin_Handled;
         }
+
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    // Get population name from args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/GA/gen/";
-    StrCat(path, sizeof(path), arg);
+
+    // Append name to path
+    char cPath[64] = "/GA/gen/";
+    StrCat(cPath, sizeof(cPath), arg);
     
-    int e=0;
-    while(FileExists(path))
+    // Increment index if file with same name already exists
+    int i = 0;
+    while(FileExists(cPath))
     {
-        e++;
-        path = "/GA/gen/";
-        StrCat(path, sizeof(path), arg);
+        i++;
+
+        // Append name to path
+        cPath = "/GA/gen/";
+        StrCat(cPath, sizeof(cPath), arg);
+
+        // Append index to path
         char num[8];
-        IntToString(e, num, sizeof(num));
-        StrCat(path, sizeof(path), num);
+        IntToString(i, num, sizeof(num));
+        StrCat(cPath, sizeof(cPath), num);
     }
-    char tPath[64];
-    strcopy(tPath, sizeof(tPath), path);
+
+    // Base path for all individuals
+    char cBasePath[64];
+    strcopy(cBasePath, sizeof(cBasePath), cPath);
+
+    // Loop through all individuals in population
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
-        path = tPath;
-        char suff[8] = "-";
+        // Set individual path
+        cPath = cBasePath;
+
+        // Get index of individual
         char numb[8];
         IntToString(i, numb, sizeof(numb));
+
+        // Create suffix "-i"
+        char suff[8] = "-";        
         StrCat(suff, sizeof(suff), numb);
-        StrCat(path, sizeof(path), suff);
-        g_hFile = OpenFile(path, "w+");
+
+        // Add suffix to individual path
+        StrCat(cPath, sizeof(cPath), suff);
+
+        // Open individual path for writing
+        g_hFile = OpenFile(cPath, "w+");
         if(g_hFile == null)
         {
             if(client == 0)
@@ -758,13 +963,17 @@ public Action CmdSaveGen(int client, int args)
                 PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
                 return Plugin_Handled;
             }
+
             CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
             PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+
             return Plugin_Handled;
         }
-        for(int f = 0; f < g_iFrames; f++)
+
+        // Loop through all frames and write to file
+        for(int j = 0; j < g_iFrames; j++)
         {
-            g_hFile.WriteLine("%d,%.16f,%.16f", g_iGAIndividualInputsInt[f][i], g_fGAIndividualInputsFloat[f][i][0], g_fGAIndividualInputsFloat[f][i][1]);
+            g_hFile.WriteLine("%d,%.16f,%.16f", g_iGAIndividualInputsInt[j][i], g_fGAIndividualInputsFloat[j][i][0], g_fGAIndividualInputsFloat[j][i][1]);
         }
         
         g_hFile.Close();    
@@ -772,13 +981,18 @@ public Action CmdSaveGen(int client, int args)
     
     if(client == 0)
     {
-        PrintToServer("%s Saved generation to %s", g_cPrintPrefixNoColor, tPath);
-        return Plugin_Handled;
+        PrintToServer("%s Saved generation to %s", g_cPrintPrefixNoColor, cBasePath);
     }
-    CPrintToChat(client, "%s Saved generation to %s", g_cPrintPrefix, tPath);
+    else
+    {
+        CPrintToChat(client, "%s Saved generation to %s", g_cPrintPrefix, cBasePath);
+    }    
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle population load command
 public Action CmdLoadGen(int client, int args)
 {
     if(args < 1)
@@ -788,27 +1002,48 @@ public Action CmdLoadGen(int client, int args)
             PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
             return Plugin_Handled;
         }
+
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    // Get name from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/GA/gen/";
-    StrCat(path, sizeof(path), arg);
-    char tPath[64];
-    strcopy(tPath, sizeof(tPath), path);
-    int lastLoaded = 0;
+
+    // Append name to population path
+    char cPath[64] = "/GA/gen/";
+    StrCat(cPath, sizeof(cPath), arg);
+
+    // Base path for all individuals
+    char cBasePath[64];
+    strcopy(cBasePath, sizeof(cBasePath), cPath);
+
+    // Keep track of number of individuals loaded
+    int iLastLoaded = 0;
+
+    // Loop through population
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
-        path = tPath;
-        char suff[8] = "-";
+        // Set individual path
+        cPath = cBasePath;
+
+        // Get index of individual
         char numb[8];
         IntToString(i, numb, sizeof(numb));
+
+        // Create suffix "-i"
+        char suff[8] = "-";
         StrCat(suff, sizeof(suff), numb);
-        StrCat(path, sizeof(path), suff);
-        g_hFile = OpenFile(path, "r");
+
+        // Append suffix to individual path
+        StrCat(cPath, sizeof(cPath), suff);
+
+        // Open individual file for reading
+        g_hFile = OpenFile(cPath, "r");
         if(g_hFile == null)
         {
+            // Error if first individual
             if(i == 0)
             {
                 if(client == 0)
@@ -817,22 +1052,35 @@ public Action CmdLoadGen(int client, int args)
                     PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
                     return Plugin_Handled;
                 }
+
                 CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
                 PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
                 return Plugin_Handled;
             }
+
             break;
         }
+
+        // Reset frame cutoff
+        g_iFrames = 0;
+
+        // Keep track of frame count of individual
         int f;
+
+        // Go to beginning of file
         g_hFile.Seek(0, SEEK_SET);
+
+        // Read each line to buffer
         char buffer[128];
         while(g_hFile.ReadLine(buffer, sizeof(buffer)))
         {
+            // Split buffer to buttons and angles
             char bu[3][18];
             int n = ExplodeString(buffer, ",", bu, 3, 18);
             
             if(n == 3)
             {
+                // Parse buttons and angles
                 g_iGAIndividualInputsInt[f][i] = StringToInt(bu[0]);
                 g_fGAIndividualInputsFloat[f][i][0] = StringToFloat(bu[1]);
                 g_fGAIndividualInputsFloat[f][i][1] = StringToFloat(bu[2]);
@@ -840,48 +1088,69 @@ public Action CmdLoadGen(int client, int args)
             else
             {
                 if(client == 0)
+                {
                     PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+                }
                 else
+                {
                     CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+                }
+
                 g_bPlayback = false;
                 g_hFile.Close();
+
                 return Plugin_Handled;
             }
+
+            // Increment frame count
             f++;
         }
 
+        // Update frame cutoff if individual is longer
         if (f > g_iFrames)
+        {
             g_iFrames = f;
-        g_hFile.Close();   
-        lastLoaded = i; 
+        }
+
+        g_hFile.Close();
+
+        iLastLoaded = i; 
     }
 
+    // Clamp frame cutoff
     if(g_iFrames > MAX_FRAMES)
     {
         if(client == 0)
+        {
             PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
+        }
         else
+        {
             CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        }
+
         g_iFrames = MAX_FRAMES;
     }  
 
-    if(lastLoaded + 1 < POPULATION_SIZE)
+    if(iLastLoaded + 1 < POPULATION_SIZE)
     {
-        GeneratePopulation(lastLoaded + 1);
+        // Generate rest of population if not all were loaded
+        GeneratePopulation(iLastLoaded + 1);
     }
     else
     {
         g_bPopulation = true;
+
         if(client == 0)
         {
             PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
-            PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
+            PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, cBasePath);
             PrintToServer("%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
         }
         else
         {
             CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
-            CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
+            CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, cBasePath);
             CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
         }    
     }          
@@ -889,6 +1158,8 @@ public Action CmdLoadGen(int client, int args)
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle population load from recording command
 public Action CmdLoadGenFromRec(int client, int args)
 {
     if(args < 1)
@@ -898,34 +1169,48 @@ public Action CmdLoadGenFromRec(int client, int args)
             PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
             return Plugin_Handled;
         }
+
         CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    // Get recording name from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/GA/rec/";
-    StrCat(path, sizeof(path), arg);
 
-    int frames = 0;
+    // Append name to path
+    char cPath[64] = "/GA/rec/";
+    StrCat(cPath, sizeof(cPath), arg);
+
+    // Reset frame cutoff
+    g_iFrames = 0;
+
+    // Keep track of individual frame counts
     int iFrameCounts[POPULATION_SIZE];
+
+    // Keep track of last loaded individual
     int iLastLoaded = 0;
 
+    // Loop through population
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
-        char individualPath[64];
-        strcopy(individualPath, sizeof(individualPath), path);
-        char index[8];
+        // Get path for individual
+        char cIndividualPath[64] = cPath;
 
+        // Append index to path if not 0
+        char index[8];
         if(i != 0)
         {
             IntToString(i, index, sizeof(index));
-            StrCat(individualPath, sizeof(individualPath), index);
+            StrCat(cIndividualPath, sizeof(cIndividualPath), index);
         }
 
-        g_hFile = OpenFile(individualPath, "r");
+        // Open file for reading
+        g_hFile = OpenFile(cIndividualPath, "r");
 
         if(g_hFile == null)
         {
+            // Error if first individual
             if (i == 0)
             {
                 if(client == 0)
@@ -934,89 +1219,113 @@ public Action CmdLoadGenFromRec(int client, int args)
                     PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
                     return Plugin_Handled;
                 }
+
                 CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
                 PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
                 return Plugin_Handled;
             }
             else
             {
-                // reached last file
+                // Reached last file
                 break;
             }
         }
 
+        // Go to beginning of file
         g_hFile.Seek(0, SEEK_SET);
+
+        // Loop through lines in file
         char buffer[128];
-        int f = 0;
+        int j = 0;
 
         while(g_hFile.ReadLine(buffer, sizeof(buffer)))
         {
+            // Split line
             char bu[3][18];
             int n = ExplodeString(buffer, ",", bu, 3, 18);
             
             if(n == 3)
             {
-                g_iGAIndividualInputsInt[f][i] = StringToInt(bu[0]);
-                g_fGAIndividualInputsFloat[f][i][0] = StringToFloat(bu[1]);
-                g_fGAIndividualInputsFloat[f][i][1] = StringToFloat(bu[2]);
+                // Parse buttons and angles
+                g_iGAIndividualInputsInt[j][i] = StringToInt(bu[0]);
+                g_fGAIndividualInputsFloat[j][i][0] = StringToFloat(bu[1]);
+                g_fGAIndividualInputsFloat[j][i][1] = StringToFloat(bu[2]);
             }
             else
             {
                 if(client == 0)
+                {
                     PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+                }
                 else
+                {
                     CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+                }
+
                 g_bPlayback = false;
                 g_hFile.Close();
+
                 return Plugin_Handled;
             }
 
             // Increment frame count
-            f++;
+            iFrameCounts[i]++;
         }
 
-        if (f > frames)
+        // Update frame cutoff if individual is longer
+        if (iFrameCounts[i] > g_iFrames)
         {
-            frames = f;
+            g_iFrames = iFrameCounts[i];
         }
 
-        iFrameCounts[i] = f;
         iLastLoaded = i;
 
         g_hFile.Close(); 
     }    
 
     if(client == 0)
-        PrintToServer("%s Loaded %d recordings from %s", g_cPrintPrefixNoColor, iLastLoaded + 1, path);
-    else
-        CPrintToChat(client, "%s Loaded %d recordings from %s", g_cPrintPrefix, iLastLoaded + 1, path);
-
-    // set frame count
-    if(frames > MAX_FRAMES)
     {
-        if(client == 0)
-            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
-        else
-            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
-        frames = MAX_FRAMES;
+        PrintToServer("%s Loaded %d recordings from %s", g_cPrintPrefixNoColor, iLastLoaded + 1, cPath);
+    }
+    else
+    {
+        CPrintToChat(client, "%s Loaded %d recordings from %s", g_cPrintPrefix, iLastLoaded + 1, cPath);
     }
 
-    g_iFrames = frames;
-    if(client == 0)
-        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
-    else
-        CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+    // Clamp frame cutoff
+    if(g_iFrames > MAX_FRAMES)
+    {
+        if(client == 0)
+        {
+            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        }
 
-    // Pad other runs to match longest one
+        g_iFrames = MAX_FRAMES;
+    }
+
+    if(client == 0)
+    {
+        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
+    }
+    else
+    {
+        CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+    }
+
+    // Pad other runs to match the longest one
     for(int i = 0; i < iLastLoaded; i++)
     {
-        if(iFrameCounts[i] < frames)
+        if(iFrameCounts[i] < g_iFrames)
         {
             Pad(i, iFrameCounts[i]);
         }
     }
 
-    // generate rest of Population
+    // Generate rest of the population if not enough were loaded
     if(iLastLoaded < POPULATION_SIZE)
     {
         GeneratePopulation(iLastLoaded + 1);
@@ -1030,114 +1339,191 @@ public Action CmdLoadGenFromRec(int client, int args)
     return Plugin_Handled;
 }
 
-public Action CmdSave(int client, int args)
+// Summary:
+// Handle config save command
+public Action CmdSaveConfig(int client, int args)
 {
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
+
+    // Get config name from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    char path[64] = "/GA/cfg/";
-    StrCat(path, sizeof(path), arg);
+
+    // Append name to path
+    char cPath[64] = "/GA/cfg/";
+    StrCat(cPath, sizeof(cPath), arg);
     
-    int e=0;
-    while(FileExists(path))
+    // Increment file path if name already exists
+    int i = 0;
+    while(FileExists(cPath))
     {
-        e++;
-        path = "/GA/cfg/";
-        StrCat(path, sizeof(path), arg);
+        i++;
+
+        // Append name to path
+        cPath = "/GA/cfg/";
+        StrCat(cPath, sizeof(cPath), arg);
+
+        // Append index to path
         char num[8];
-        IntToString(e, num, sizeof(num));
-        StrCat(path, sizeof(path), num);
+        IntToString(i, num, sizeof(num));
+        StrCat(cPath, sizeof(cPath), num);
     }
     
-    g_hFile = OpenFile(path, "w+");
+    // Open file for writing
+    g_hFile = OpenFile(cPath, "w+");
     if(g_hFile == null)
     {
         if(client == 0)
+        {
             PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+        }
+
         PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+
         return Plugin_Handled;
     }
+
+    // Write frame count
     g_hFile.WriteLine("%d", g_iFrames);
+
+    // Write start position, start rotation and end position
     g_hFile.WriteLine("%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f", g_fGAStartPos[0], g_fGAStartPos[1], g_fGAStartPos[2], g_fGAStartAng[0], g_fGAStartAng[1], g_fGAStartAng[2], g_fGAEndPos[0], g_fGAEndPos[1], g_fGAEndPos[2]);
+    
+    // Loop through checkpoints
     for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
+        // Check if checkpoint exists
         if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
+        {
+            // Write checkpoint position
             g_hFile.WriteLine("%.16f,%.16f,%.16f", g_fGACheckPoints[i][0], g_fGACheckPoints[i][1], g_fGACheckPoints[i][2]);
+        }
     }
+
     g_hFile.Close();    
+
     if(client == 0)
-        PrintToServer("%s Saved config to %s", g_cPrintPrefixNoColor, path);
+    {
+        PrintToServer("%s Saved config to %s", g_cPrintPrefixNoColor, cPath);
+    }
     else
-        CPrintToChat(client, "%s Saved config to %s", g_cPrintPrefix, path);
+    {
+        CPrintToChat(client, "%s Saved config to %s", g_cPrintPrefix, cPath);
+    }
+
     return Plugin_Handled;
 }
 
-public Action CmdLoad(int client, int args)
+// Summary:
+// Handle config load command
+public Action CmdLoadConfig(int client, int args)
 {
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing name argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing name argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
     
-    char arg[64], target[64] = "/GA/cfg/";
+    // Get config name from command args
+    char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    StrCat(target, sizeof(target), arg);
+
+    // Append name to path
+    cPath[64] = "/GA/cfg/";
+    StrCat(cPath, sizeof(cPath), arg);
     
-    if(FileExists(target))
+    // Open file for reading
+    if(FileExists(cPath))
     {
-        g_hFile = OpenFile(target, "r");
+        g_hFile = OpenFile(cPath, "r");
     }
     else
     {
         if(client == 0)
+        {
             PrintToServer("%s Can't find file %s.", g_cPrintPrefixNoColor, arg);
+        }
         else
+        {
             CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
+        }
+
         return Plugin_Handled;
     }
+
     if(g_hFile == null)
     {
         if(client == 0)
+        {
             PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+        }
+
         PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
+    // Go to beginning of file
     g_hFile.Seek(0, SEEK_SET);
     
+    // Buffer for reading
     char buffer[256];
+
+    // Get frame count
     if(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
-        int num;
-        if(StringToIntEx(buffer, num))
+        int iNum;
+        if(StringToIntEx(buffer, iNum))
         {
-            g_iFrames = num;
+            g_iFrames = iNum;
         }
         else
         {
             if(client == 0)
+            {
                 PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+            }
             else
+            {
                 CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+            }
+
             g_bPlayback = false;
+
             g_hFile.Close();
+
             return Plugin_Handled;
         }
     }
+
+    // Read start position, start rotation and end position
     if(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
         char bu[9][18];
@@ -1161,19 +1547,30 @@ public Action CmdLoad(int client, int args)
         else
         {
             if(client == 0)
+            {
                 PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+            }
             else
+            {
                 CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+            }
+
             g_bPlayback = false;
+
             g_hFile.Close();
+
             return Plugin_Handled;
         }
     }
+
+    // Reset checkpoints
     for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
         g_fGACheckPoints[i] = { 0.0, 0.0, 0.0 };
     }
-    int cp;
+
+    // Read any checkpoints
+    int iCP;
     while(g_hFile.ReadLine(buffer, sizeof(buffer)))
     {
         char bu[3][18];
@@ -1183,52 +1580,77 @@ public Action CmdLoad(int client, int args)
         {
             for(int i = 0; i < 3; i++)
             {
-                g_fGACheckPoints[cp][i] = StringToFloat(bu[i]);
+                g_fGACheckPoints[iCP][i] = StringToFloat(bu[i]);
             }            
         }
         else
         {
             if(client == 0)
+            {
                 PrintToServer("%s Bad save format", g_cPrintPrefixNoColor);
+            }
             else
+            {
                 CPrintToChat(client, "%s Bad save format", g_cPrintPrefix);
+            }
+
             g_bPlayback = false;
+
             g_hFile.Close();
+
             return Plugin_Handled;
         }
-        cp++;
+
+        iCP++;
     }
 
     g_hFile.Close(); 
 
     if(client == 0)
+    {
         PrintToServer("%s Loaded config from %s", g_cPrintPrefixNoColor, target);
+    }
     else
+    {
         CPrintToChat(client, "%s Loaded config from %s", g_cPrintPrefix, target);
+    }
 
+    // Reset debug lines
     if(g_bDraw)
     {
         HideLines();
         DrawLines();
     }
 
+    // Clamp frame cutoff
     if(g_iFrames > MAX_FRAMES)
     {
         if(client == 0)
+        {
             PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
+        }
         else
+        {
             CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        }
+
         g_iFrames = MAX_FRAMES;
     }
 
     if(client == 0)
+    {
         PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
+    }
     else
+    {
         CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+    }
 
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle timescale command 
 public Action CmdSetTimeScale(int client, int args)
 {
     if(args < 1)
@@ -1654,23 +2076,21 @@ public void Pad(int individual, int startFrame)
 
 public Action Timer_SetupBot(Handle hTimer)
 {
-    if (g_iBot != -1) {
+    if (g_iBot != -1)
+    {
         return;
     }
-    if (g_bBCExtension) {
-        g_iBot = BotController_CreateBot(g_cBotName);
-        
-        if (!IsClientInGame(g_iBot)) {
-            SetFailState("%s", "Cannot create bot");
-        }
-        ChangeClientTeam(g_iBot, g_iBotTeam);
-        TF2_SetPlayerClass(g_iBot, TFClass_Pyro);
-        ServerCommand("mp_waitingforplayers_cancel 1;");
-    } 
-    else 
+
+    g_iBot = BotController_CreateBot(g_cBotName);
+    
+    if (!IsClientInGame(g_iBot))
     {
-        SetFailState("%s", "No bot controller extension");
+        SetFailState("%s", "Cannot create bot");
     }
+
+    ChangeClientTeam(g_iBot, g_iBotTeam);
+    TF2_SetPlayerClass(g_iBot, TFClass_Pyro);
+    ServerCommand("mp_waitingforplayers_cancel 1;");
 }
 
 public Action Timer_KillEnt(Handle hTimer, int ent)
