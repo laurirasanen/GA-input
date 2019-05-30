@@ -679,7 +679,7 @@ public Action CmdRecord(int client, int args)
 
         // Append name to recording path
         cPath = "/GA/rec/";
-        StrCat(path, sizeof(cPath), arg);
+        StrCat(cPath, sizeof(cPath), arg);
 
         // Append index to recording path
         char num[8];
@@ -727,7 +727,7 @@ public Action CmdStopRecord(int client, int args)
 
     if(g_iRecordingClient != client)
     {
-        CPrintToChat(client, "%s Someone else is recording!", g_cPrintPrefix)
+        CPrintToChat(client, "%s Someone else is recording!", g_cPrintPrefix);
         return Plugin_Handled;
     }
 
@@ -1195,7 +1195,8 @@ public Action CmdLoadGenFromRec(int client, int args)
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
         // Get path for individual
-        char cIndividualPath[64] = cPath;
+        char cIndividualPath[64];
+        strcopy(cIndividualPath, sizeof(cIndividualPath), cPath);
 
         // Append index to path if not 0
         char index[8];
@@ -1453,7 +1454,7 @@ public Action CmdLoadConfig(int client, int args)
     GetCmdArg(1, arg, sizeof(arg));
 
     // Append name to path
-    cPath[64] = "/GA/cfg/";
+    char cPath[64] = "/GA/cfg/";
     StrCat(cPath, sizeof(cPath), arg);
     
     // Open file for reading
@@ -1608,11 +1609,11 @@ public Action CmdLoadConfig(int client, int args)
 
     if(client == 0)
     {
-        PrintToServer("%s Loaded config from %s", g_cPrintPrefixNoColor, target);
+        PrintToServer("%s Loaded config from %s", g_cPrintPrefixNoColor, cPath);
     }
     else
     {
-        CPrintToChat(client, "%s Loaded config from %s", g_cPrintPrefix, target);
+        CPrintToChat(client, "%s Loaded config from %s", g_cPrintPrefix, cPath);
     }
 
     // Reset debug lines
@@ -1656,135 +1657,211 @@ public Action CmdSetTimeScale(int client, int args)
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
+
+    // Get timescale from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    float num;
-    if(!StringToFloatEx(arg, num))
+
+    // Parse to float
+    if(!StringToFloatEx(arg, g_fTimeScale))
     {
         if(client == 0)
-            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
         else
-            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+
         return Plugin_Handled;
     }
-    g_fTimeScale = num;
+
     if(client == 0)
-        PrintToServer("%s Loop timescale set to %f", g_cPrintPrefixNoColor, num);
+    {
+        PrintToServer("%s Loop timescale set to %f", g_cPrintPrefixNoColor, g_fTimeScale);
+    }
     else
-        CPrintToChat(client, "%s Loop timescale set to %f", g_cPrintPrefix, num);
+    {
+        CPrintToChat(client, "%s Loop timescale set to %f", g_cPrintPrefix, g_fTimeScale);
+    }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle frame cutoff command
 public Action CmdSetFrames(int client, int args)
 {
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
+
+    // Get cutoff from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    int num;
-    if(!StringToIntEx(arg, num))
+
+    // Parse to int
+    if(!StringToIntEx(arg, g_iFrames))
     {
         if(client == 0)
-            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
         else
-            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+
         return Plugin_Handled;
     }
-    if(num > MAX_FRAMES)
+
+    if(g_iFrames > MAX_FRAMES)
     {
         if(client == 0)
+        {
             PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
+        }
         else
+        {
             CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
-        num = MAX_FRAMES;
+        }
+
+        g_iFrames = MAX_FRAMES;
     }
-    g_iFrames = num;
+
     if(client == 0)
-        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, num);
+    {
+        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, g_iFrames);
+    }
     else
-        CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, num);
+    {
+        CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+    }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle mutation chance command
 public Action CmdSetMutationChance(int client, int args)
 {
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
 
+    // Get chance from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    float num;
 
-    if(!StringToFloatEx(arg, num))
+    // Parse to float
+    if(!StringToFloatEx(arg, g_fMutationChance))
     {
         if(client == 0)
-            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
         else
-            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+
         return Plugin_Handled;
     }
 
-    g_fMutationChance = num;
-
     if(client == 0)
-        PrintToServer("%s Mutation chance set to %f", g_cPrintPrefixNoColor, num);
+    {
+        PrintToServer("%s Mutation chance set to %f", g_cPrintPrefixNoColor, g_fMutationChance);
+    }
     else
-        CPrintToChat(client, "%s Mutation chance set to %f", g_cPrintPrefix, num);
+    {
+        CPrintToChat(client, "%s Mutation chance set to %f", g_cPrintPrefix, g_fMutationChance);
+    }
 
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle rotation mutation chance command
 public Action CmdSetRotationMutationChance(int client, int args)
 {
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
 
+    // Get chance from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    float num;
 
-    if(!StringToFloatEx(arg, num))
+    // Parse to float
+    if(!StringToFloatEx(arg, g_fRotationMutationChance))
     {
         if(client == 0)
-            PrintToServer("%s Failed to parse number", g_cPrintPrefixNoColor);
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
         else
-            CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+
         return Plugin_Handled;
     }
 
-    g_fRotationMutationChance = num;
-
     if(client == 0)
-        PrintToServer("%s Rotation mutation chance set to %f", g_cPrintPrefixNoColor, num);
+    {
+        PrintToServer("%s Rotation mutation chance set to %f", g_cPrintPrefixNoColor, g_fRotationMutationChance);
+    }
     else
-        CPrintToChat(client, "%s Rotation mutation chance set to %f", g_cPrintPrefix, num);
+    {
+        CPrintToChat(client, "%s Rotation mutation chance set to %f", g_cPrintPrefix, g_fRotationMutationChance);
+    }
 
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle checkpoint remove command
 public Action CmdRemoveCheckpoint(int client, int args)
 {
     if(client == 0)
@@ -1792,34 +1869,55 @@ public Action CmdRemoveCheckpoint(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    // Get checkpoint index from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
-    int num;
-    if(!StringToIntEx(arg, num))
+
+    // Parse to int
+    int iCP;
+    if(!StringToIntEx(arg, iCP))
     {
-        CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
+        CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
         return Plugin_Handled;
     }
-    g_fGACheckPoints[num] = { 0.0, 0.0, 0.0 };
-    for(int i = num; i < MAX_CHECKPOINTS; i++)
+
+    // Remove checkpoint
+    g_fGACheckPoints[iCP] = { 0.0, 0.0, 0.0 };
+
+    // Shift all checkpoints after iCP to new indices 
+    for(int i = iCP; i < MAX_CHECKPOINTS; i++)
     {
         if(i < MAX_CHECKPOINTS - 1)
+        {
             g_fGACheckPoints[i] = g_fGACheckPoints[i+1];
-    } 
-    CPrintToChat(client, "%s Checkpoint %d removed!", g_cPrintPrefix, num);
+        }
+    }
+
+    // Reset last checkpoint
+    // Will be a duplicate if all checkpoints are assigned before removing one
+    g_fGACheckPoints[MAX_CHECKPOINTS - 1] = { 0.0, 0.0, 0.0 };
+
+    CPrintToChat(client, "%s Checkpoint %d removed!", g_cPrintPrefix, iCP);
+
+    // Update debug lines
     if(g_bDraw)
     {
         HideLines();
         DrawLines();
     }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle checkpoint add command
 public Action CmdAddCheckpoint(int client, int args)
 {
     if(client == 0)
@@ -1827,6 +1925,8 @@ public Action CmdAddCheckpoint(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
+    // Find first unused checkpoint
     for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
         if(g_fGACheckPoints[i][0] == 0 && g_fGACheckPoints[i][1] == 0 && g_fGACheckPoints[i][2] == 0)
@@ -1837,21 +1937,26 @@ public Action CmdAddCheckpoint(int client, int args)
         }
         else
         {
-            if(i == MAX_CHECKPOINTS-1)
+            if(i >= MAX_CHECKPOINTS - 1)
             {
-                CPrintToChat(client, "%s Checkpoint limit reached! Try deleting some.", g_cPrintPrefix);
+                CPrintToChat(client, "%s Checkpoint limit of %d reached! Try deleting some.", g_cPrintPrefix, MAX_CHECKPOINTS);
                 return Plugin_Handled;
             }
         }
-    }    
+    }
+
+    // Update debug lines
     if(g_bDraw)
     {
         HideLines();
         DrawLines();
     }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle start position command
 public Action CmdStart(int client, int args)
 {
     if(client == 0)
@@ -1859,17 +1964,25 @@ public Action CmdStart(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
+    // Set global variables
     GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fGAStartPos);
     GetClientEyeAngles(client, g_fGAStartAng);
-    CPrintToChat(client, "%s Start set", g_cPrintPrefix);
+
+    // Update debug lines
     if(g_bDraw)
     {
         HideLines();
         DrawLines();
     }
+
+    CPrintToChat(client, "%s Start set", g_cPrintPrefix);
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle end position command
 public Action CmdEnd(int client, int args)
 {
     if(client == 0)
@@ -1877,34 +1990,53 @@ public Action CmdEnd(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
+    // Set global variable
     GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fGAEndPos);
-    CPrintToChat(client, "%s End set", g_cPrintPrefix);
+    
+    // Update debug lines
     if(g_bDraw)
     {
         HideLines();
         DrawLines();
     }
+
+    CPrintToChat(client, "%s End set", g_cPrintPrefix);
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle population clear command
 public Action CmdClear(int client, int args)
 {
+    // Set global variables
     g_bPopulation = false;
     g_iTargetGen = 0;
     g_iCurrentGen = 0;
+
     if(client == 0)
-        PrintToServer("%s Cleared generation!", g_cPrintPrefixNoColor);
+    {
+        PrintToServer("%s Cleared population!", g_cPrintPrefixNoColor);
+    }
     else
-        CPrintToChat(client, "%s Cleared generation!", g_cPrintPrefix);
+    {
+        CPrintToChat(client, "%s Cleared population!", g_cPrintPrefix);
+    }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle manual generation command
 public Action CmdGen(int client, int args)
 {
     GeneratePopulation();
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle manual simulation command
 public Action CmdSim(int client, int args)
 {
     ServerCommand("host_timescale %f", g_fTimeScale);
@@ -1912,59 +2044,92 @@ public Action CmdSim(int client, int args)
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle manual breed command
 public Action CmdBreed(int client, int args)
 {
     Breed();
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle breeding loop stop command
 public Action CmdStopLoop(int client, int args)
 {
     g_iTargetGen = g_iCurrentGen;
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle breeding loop command
 public Action CmdLoop(int client, int args)
 {
-    SetEntProp(g_iBot, Prop_Data, "m_takedamage", 1, 1); // Buddha
+    // Prevent bot from taking damage
+    SetEntProp(g_iBot, Prop_Data, "m_takedamage", 0, 0);
+
     if(args < 1)
     {
         if(client == 0)
+        {
             PrintToServer("%s Missing number of generations argument", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Missing number of generations argument", g_cPrintPrefix);
+        }
+
         return Plugin_Handled;
     }
+
+    // Get loop count from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
+
+    // Parse to int
     int gen = 0;
     if(StringToIntEx(arg, gen))
     {
         g_iTargetGen += gen;
+
+        // Generate population if doesn't exist
         if(!g_bPopulation)
         {
             GeneratePopulation();
             return Plugin_Handled;
         }          
         
+        // Start breeding
         if(g_iTargetGen > g_iCurrentGen)
+        {
             Breed();
+        }
     }        
     else
     {
         if(client == 0)
+        {
             PrintToServer("%s Couldn't parse number", g_cPrintPrefixNoColor);
+        }
         else
+        {
             CPrintToChat(client, "%s Couldn't parse number", g_cPrintPrefix);
+        }
     }
         
     if(client == 0)
+    {
         PrintToServer("%s Loop started", g_cPrintPrefixNoColor);
+    }
     else
+    {
         CPrintToChat(client, "%s Loop started", g_cPrintPrefix);
+    }
+
     return Plugin_Handled;
 }
 
+// Summary:
+// Handle generated individual play command
 public Action CmdPlay(int client, int args)
 {
     if(client == 0)
@@ -1972,13 +2137,18 @@ public Action CmdPlay(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
+
     if(args < 1)
     {
         CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
         return Plugin_Handled;
     }
+
+    // Get individual index from command args
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
+
+    // Parse to int
     int index = 0;
     if(StringToIntEx(arg, index))
     {
@@ -1988,7 +2158,9 @@ public Action CmdPlay(int client, int args)
         CPrintToChat(client, "%s Playing %d-%d", g_cPrintPrefix, g_iCurrentGen, index);
     }        
     else
+    {
         CPrintToChat(client, "%s Couldn't parse number", g_cPrintPrefix);        
+    }
     
     return Plugin_Handled;
 }
