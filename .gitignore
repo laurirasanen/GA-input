@@ -1,2 +1,2 @@
-scripting/*
-!scripting/*.sp
+*/compiled
+compile.dat
