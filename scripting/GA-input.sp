@@ -1,5 +1,11 @@
-#pragma semicolon 1
+// ****************************************************************
+// Genetic algorithm plugin for Team Fortress 2.
+// Author: Lauri Räsänen
+// ****************************************************************
 
+// ****************************************************************
+// SourceMod includes
+// ****************************************************************
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
@@ -7,22 +13,39 @@
 #include <console>
 #include <tf2>
 #include <tf2_stocks>
+
+// ****************************************************************
+// Custom includes
+// ****************************************************************
 #include <morecolors>
 
-#undef REQUIRE_EXTENSIONS
+// ****************************************************************
+// Extension includes
+// ****************************************************************
 #include <botcontroller>
 
-#define MAXCHECKPOINTS 100
-// about 10 mins (assuming 66.6/s)
-#define MAXFRAMES 40000
-#define POPULATION 200
-#define LUCKYFEW 40
+// ****************************************************************
+// Pragma
+// ****************************************************************
+#pragma semicolon 1         // Don't allow missing semicolons
+#pragma newdecls required   // Enforce new 1.7 SourcePawn syntax
 
+// ****************************************************************
+// Constants
+// ****************************************************************
+#define MAX_CHECKPOINTS 100
+#define MAX_FRAMES 5000     // about 75 seconds (assuming 66.6 ticks/s)
+#define POPULATION_SIZE 64
+#define LUCKY_FEW 8
+
+// ****************************************************************
+// Global variables
+// ****************************************************************
 bool g_bRecording;
 bool g_bPlayback;
 bool g_bSimulating;
 bool g_bBCExtension;
-bool g_bGAIndividualMeasured[POPULATION];
+bool g_bGAIndividualMeasured[POPULATION_SIZE];
 bool g_bPopulation;
 bool g_bGAplayback;
 bool g_bDraw;
@@ -35,28 +58,24 @@ int g_iSimIndex;
 int g_iSimCurrentFrame;
 int g_iTargetGen;
 int g_iCurrentGen;
-int g_iGAIndividualInputsInt[MAXFRAMES][POPULATION];
+int g_iGAIndividualInputsInt[MAX_FRAMES][POPULATION_SIZE];
 int g_iFrames;
-int g_iStartTime = 200;
-int g_iPlayBackStart = 0;
 int g_iRecordingClient = -1;
 int g_iLeftOverFrames = 0;
 
-float g_fTimeScale = 100.0;
-float g_fStartPos[3];
-float g_fStartAng[3];
-float g_fGAIndividualInputsFloat[MAXFRAMES][POPULATION][2];
-float g_fGAIndividualFitness[POPULATION];
+float g_fTimeScale = 1000.0;
+float g_fGAIndividualInputsFloat[MAX_FRAMES][POPULATION_SIZE][2];
+float g_fGAIndividualFitness[POPULATION_SIZE];
 float g_fGAStartPos[3];
 float g_fGAStartAng[3];
 float g_fGAEndPos[3];
-float g_fGACheckPoints[MAXCHECKPOINTS][3];
+float g_fGACheckPoints[MAX_CHECKPOINTS][3];
 float g_fTelePos[3] = {0.0, 0.0, 0.0};
 float g_fOverrideFitness;
 float g_fLastPos[3];
-float g_fMutationChance = 0.01;
-float g_fRotationMutationChance = 0.01;
-float g_fEndCutoff = 200.0;
+float g_fMutationChance = 0.05;
+float g_fRotationMutationChance = 0.05;
+float g_fEndCutoff = 400.0;
 
 File g_hFile;
 
@@ -65,15 +84,21 @@ char g_cPrintPrefix[] = "[{orange}GA{default}]";
 char g_cPrintPrefixNoColor[] = "[GA]";
 char g_cLastRecord[64];
 
+// ****************************************************************
+// Plugin info
+// ****************************************************************
 public Plugin myinfo =
 {
     name = "GA-input",
     author = "Larry",
-    description = "",
+    description = "Genetic algorithm for surf",
     version = "1.0.0",
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
+// ****************************************************************
+// SourceMod callbacks
+// ****************************************************************
 public void OnPluginStart()
 {
     // testing cmds
@@ -170,35 +195,35 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     {
         if(client == g_iBot)
         {
-        	// already measured
+            // already measured
             if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAplayback)
             {
                 //PrintToServer("%s Fitness of %d-%d: %f (parent)", g_cPrintPrefixNoColor, g_iCurrentGen, g_iSimIndex, g_fGAIndividualFitness[g_iSimIndex]);
                 g_iSimIndex++;
     
-                if(g_iSimIndex == POPULATION)
+                if(g_iSimIndex == POPULATION_SIZE)
                 {
-                	float bestFitness = 0.0;
-                	int fittestIndex = 0;
-            	    for(int i=0; i<POPULATION;i++)
-    				{
-    					if(g_fGAIndividualFitness[i] > bestFitness)
-    					{
-    						bestFitness = g_fGAIndividualFitness[i];
-    						fittestIndex = i;
-    					}
-    				}
+                    float bestFitness = 0.0;
+                    int fittestIndex = 0;
+                    for(int i = 0; i < POPULATION_SIZE; i++)
+                    {
+                        if(g_fGAIndividualFitness[i] > bestFitness)
+                        {
+                            bestFitness = g_fGAIndividualFitness[i];
+                            fittestIndex = i;
+                        }
+                    }
 
-                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                    PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
                     g_bSimulating = false;
                     if(g_iTargetGen > g_iCurrentGen)
                     {
-						Breed();  
+                        Breed();  
                     }                        
                     else
                     {
-                    	ServerCommand("host_timescale 1");
+                        ServerCommand("host_timescale 1");
                     }               
                 }
                 
@@ -217,31 +242,30 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
                     int currentTick = GetGameTickCount();
                     PrintToServer("Playback end tick: %d", currentTick);
-                    PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
                     PrintToServer("g_iSimCurrentFrame: %d, g_iFrames: %d", g_iSimCurrentFrame, g_iFrames);
                     return Plugin_Continue;
                 }
                 g_iSimIndex++;
     
-                if(g_iSimIndex < POPULATION)
+                if(g_iSimIndex < POPULATION_SIZE)
                 {
                     MeasureFitness(g_iSimIndex);
                 }
                 else
                 {
-                	float bestFitness = 0.0;
-                	int fittestIndex = 0;
+                    float bestFitness = 0.0;
+                    int fittestIndex = 0;
 
-            	    for(int i=0; i<POPULATION;i++)
-    				{
-    					if(g_fGAIndividualFitness[i] > bestFitness)
-    					{
-    						bestFitness = g_fGAIndividualFitness[i];
-    						fittestIndex = i;
-    					}
-    				}
+                    for(int i = 0; i < POPULATION_SIZE; i++)
+                    {
+                        if(g_fGAIndividualFitness[i] > bestFitness)
+                        {
+                            bestFitness = g_fGAIndividualFitness[i];
+                            fittestIndex = i;
+                        }
+                    }
 
-                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                    PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
                     if(g_iTargetGen > g_iCurrentGen)
                     {
@@ -277,29 +301,86 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                         int currentTick = GetGameTickCount();
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
                         PrintToServer("Playback end tick: %d", currentTick);
-                        PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
                         return Plugin_Continue;
                     }
                     g_iSimIndex++;
         
-                    if(g_iSimIndex < POPULATION)
+                    if(g_iSimIndex < POPULATION_SIZE)
                     {
                         MeasureFitness(g_iSimIndex);
                     }
                     else
                     {
-                    	float bestFitness = 0.0;
-	                	int fittestIndex = 0;
-	            	    for(int i=0; i<POPULATION;i++)
-	    				{
-	    					if(g_fGAIndividualFitness[i] > bestFitness)
-	    					{
-	    						bestFitness = g_fGAIndividualFitness[i];
-	    						fittestIndex = i;
-	    					}
-	    				}
+                        float bestFitness = 0.0;
+                        int fittestIndex = 0;
+                        for(int i = 0; i < POPULATION_SIZE; i++)
+                        {
+                            if(g_fGAIndividualFitness[i] > bestFitness)
+                            {
+                                bestFitness = g_fGAIndividualFitness[i];
+                                fittestIndex = i;
+                            }
+                        }
 
-	                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                        PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+
+                        if(g_iTargetGen > g_iCurrentGen)
+                        {
+                            Breed();
+                        }                        
+                        else
+                        {
+                            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
+                            ServerCommand("host_timescale 1");
+                        }
+                    }
+                    
+                    return Plugin_Continue;
+                }
+
+                if (GetVectorDistance(fPos, g_fGAEndPos) < g_fEndCutoff && fPos[2] > g_fGAEndPos[2])
+                {
+                    // At end
+                    // stop generation
+                    //g_iTargetGen = g_iCurrentGen;
+
+                    g_bSimulating = false;
+                    g_bGAIndividualMeasured[g_iSimIndex] = true;
+                    g_bMadeToEnd = true;
+                    g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
+                    CalculateFitness(g_iSimIndex);
+
+                    PrintToServer("%d reached the end in %d frames! (%f)", g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
+
+                    if(g_bGAplayback)
+                    {
+                        g_bGAplayback = false;
+                        g_bSimulating = false;
+                        int currentTick = GetGameTickCount();
+                        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+                        PrintToServer("Playback end tick: %d", currentTick);
+                        return Plugin_Continue;
+                    }
+                    g_iSimIndex++;
+        
+                    if(g_iSimIndex < POPULATION_SIZE)
+                    {
+                        MeasureFitness(g_iSimIndex);
+                    }
+                    else
+                    {
+                        float bestFitness = 0.0;
+                        int fittestIndex = 0;
+                        for(int i = 0; i < POPULATION_SIZE; i++)
+                        {
+                            if(g_fGAIndividualFitness[i] > bestFitness)
+                            {
+                                bestFitness = g_fGAIndividualFitness[i];
+                                fittestIndex = i;
+                            }
+                        }
+
+                        PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
 
                         if(g_iTargetGen > g_iCurrentGen)
                         {
@@ -316,116 +397,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 }
             }
             GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fLastPos);
-            
-            if(g_iSimCurrentFrame > g_iStartTime)
-            {
-                float fPos[3];
-                GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
-                if (GetVectorDistance(fPos, g_fGAEndPos) < g_fEndCutoff && fPos[2] > g_fGAEndPos[2])
-                {
-                	// At end
-                	
-                    g_bSimulating = false;
-                    g_bGAIndividualMeasured[g_iSimIndex] = true;
-                    g_bMadeToEnd = true;
-                    g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
-                    CalculateFitness(g_iSimIndex);
-
-                    PrintToServer("%d reached the end in %d frames! (%f)", g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
-
-                    if(g_bGAplayback)
-                    {
-                        g_bGAplayback = false;
-                        g_bSimulating = false;
-                        int currentTick = GetGameTickCount();
-                        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                        PrintToServer("Playback end tick: %d", currentTick);
-                        PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
-                        return Plugin_Continue;
-                    }
-                    g_iSimIndex++;
-        
-                    if(g_iSimIndex < POPULATION)
-                    {
-                        MeasureFitness(g_iSimIndex);
-                    }
-                    else
-                    {
-                    	float bestFitness = 0.0;
-	                	int fittestIndex = 0;
-	            	    for(int i=0; i<POPULATION;i++)
-	    				{
-	    					if(g_fGAIndividualFitness[i] > bestFitness)
-	    					{
-	    						bestFitness = g_fGAIndividualFitness[i];
-	    						fittestIndex = i;
-	    					}
-	    				}
-
-	                	PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
-
-                        if(g_iTargetGen > g_iCurrentGen)
-                        {
-                            Breed();
-                        }                        
-                        else
-                        {
-                            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
-                            ServerCommand("host_timescale 1");
-                        }
-                    }
-                    
-                    return Plugin_Continue;
-                }
-
-                /*float cPos[3];
-                ClosestPoint(g_fGACheckPoints[0], g_fGAStartPos, fPos, cPos);*/
-                // within 200 units of start after 200 ticks (hasn't left spawn area)
-                /*if(GetVectorDistance(cPos, g_fGAStartPos) < 80)
-                {
-                    g_bSimulating = false;
-                    // uncomment to prevent parents of new generations from being measured again (faster), sometimes non-deterministic dunno why
-                    g_bGAIndividualMeasured[g_iSimIndex] = true;
-                    g_fOverrideFitness = -10000000.0;
-                    if(GetVectorDistance(cPos, g_fGAStartPos) > 0)
-                		g_fOverrideFitness += GetVectorDistance(cPos, g_fGAStartPos);
-            		else
-            			g_fOverrideFitness -= GetVectorDistance(fPos, g_fGAStartPos);
-                    CalculateFitness(g_iSimIndex);
-                    if(g_bGAplayback)
-                    {
-                        g_bGAplayback = false;
-                        g_bSimulating = false;
-                        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                        int currentTick = GetGameTickCount();
-                        PrintToServer("Playback end tick: %d", currentTick);
-                        PrintToServer("Playback duration: %d", currentTick - g_iPlayBackStart);
-                        return Plugin_Continue;
-                    }
-                    g_iSimIndex++;
-        
-                    if(g_iSimIndex < POPULATION)
-                    {
-                        MeasureFitness(g_iSimIndex);
-                    }
-                    else
-                    {
-                        if(g_iTargetGen > g_iCurrentGen)
-                        {
-                            Breed();
-                        }                        
-                        else
-                        {
-                            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
-                            ServerCommand("host_timescale 1");
-                        }
-                    }
-                    
-                    return Plugin_Continue;
-                }*/
-            }
-
-            //TeleportEntity(client, NULL_VECTOR, fAng, NULL_VECTOR);
             
             buttons = g_iGAIndividualInputsInt[g_iSimCurrentFrame][g_iSimIndex];
             
@@ -453,7 +424,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
             for(int i = 0; i < 3; i++)
             {
-            	angles[i] = fAng[i];
+                angles[i] = fAng[i];
             }
 
             g_iSimCurrentFrame++;        
@@ -462,7 +433,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         }
         
     }
-    if(g_hFile == INVALID_HANDLE)
+    if(g_hFile == null)
     {
         return Plugin_Continue;
     }
@@ -536,7 +507,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
                 for(int i = 0; i < 3; i++)
                 {
-                	angles[i] = fAng[i];
+                    angles[i] = fAng[i];
                 }
 
                 return Plugin_Changed;
@@ -551,6 +522,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     }
     return Plugin_Continue;
 }
+
+// ****************************************************************
+// Commands
+// ****************************************************************
 
 public Action CmdRecord(int client, int args)
 {
@@ -577,14 +552,14 @@ public Action CmdRecord(int client, int args)
     g_cLastRecord = "";
     StrCat(g_cLastRecord, sizeof(g_cLastRecord), arg);
     
-    int e=0;
+    int i = 0;
     while(FileExists(path))
     {
-        e++;
+        i++;
         path = "/GA/rec/";
         StrCat(path, sizeof(path), arg);
         char num[8];
-        IntToString(e, num, sizeof(num));
+        IntToString(i, num, sizeof(num));
         StrCat(path, sizeof(path), num);
 
         g_cLastRecord = "";
@@ -592,12 +567,9 @@ public Action CmdRecord(int client, int args)
         StrCat(g_cLastRecord, sizeof(g_cLastRecord), num);
     }
     
-    //GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", g_fStartPos);
-    //GetClientEyeAngles(client, g_fStartAng);
-    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
+    TeleportEntity(client, g_fGAStartPos, g_fGAStartAng, { 0.0, 0.0, 0.0 });
 
     g_hFile = OpenFile(path, "w+");
-
     
     g_bRecording = true;
     g_bPlayback = false;
@@ -619,7 +591,7 @@ public Action CmdStopRecord(int client, int args)
         CPrintToChat(client, "%s Not recording!", g_cPrintPrefix);
         return Plugin_Handled;
     }
-    if(g_hFile != INVALID_HANDLE)
+    if(g_hFile != null)
         g_hFile.Close();
     g_bRecording = false;
     g_bPlayback = false;
@@ -630,29 +602,29 @@ public Action CmdStopRecord(int client, int args)
 
 public Action CmdRemoveRecord(int client, int args)
 {
-	char path[64] = "/GA/rec/";
+    char path[64] = "/GA/rec/";
     StrCat(path, sizeof(path), g_cLastRecord);
 
     if(strcmp(path, "/GA/rec/", true) == 0)
     {
-    	PrintToServer("Couldn't find recording %s to delete", path);
-    	return Plugin_Handled;
+        PrintToServer("Couldn't find recording %s to delete", path);
+        return Plugin_Handled;
     }
     
     if(FileExists(path))
     {
         if(DeleteFile(path, false))
         {
-        	PrintToServer("Deleted recording %s", path);
+            PrintToServer("Deleted recording %s", path);
         }
         else
         {
-        	PrintToServer("Failed to delete recording %s", path);
+            PrintToServer("Failed to delete recording %s", path);
         }
     }
     else
     {
-    	PrintToServer("Couldn't find recording %s to delete, file doesn't exist", path);
+        PrintToServer("Couldn't find recording %s to delete, file doesn't exist", path);
     }
     return Plugin_Handled;
 }
@@ -683,7 +655,7 @@ public Action CmdPlayback(int client, int args)
         CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
         return Plugin_Handled;
     }
-    if(g_hFile == INVALID_HANDLE)
+    if(g_hFile == null)
     {
         CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
         PrintToServer("%s Invalid g_hFile handle", g_cPrintPrefixNoColor);
@@ -734,10 +706,10 @@ public Action CmdDebug(int client, int args)
 
 public Action CmdFitness(int client, int args)
 {
-	for(int i = 0; i < POPULATION; i++)
-	{
-		PrintToServer("%s Fitness of individual %d: %f", g_cPrintPrefixNoColor, i, g_fGAIndividualFitness[i]);
-	}
+    for(int i = 0; i < POPULATION_SIZE; i++)
+    {
+        PrintToServer("%s Fitness of individual %d: %f", g_cPrintPrefixNoColor, i, g_fGAIndividualFitness[i]);
+    }
 }
 
 public Action CmdSaveGen(int client, int args)
@@ -769,7 +741,7 @@ public Action CmdSaveGen(int client, int args)
     }
     char tPath[64];
     strcopy(tPath, sizeof(tPath), path);
-    for(int i=0; i < POPULATION; i++)
+    for(int i = 0; i < POPULATION_SIZE; i++)
     {
         path = tPath;
         char suff[8] = "-";
@@ -778,7 +750,7 @@ public Action CmdSaveGen(int client, int args)
         StrCat(suff, sizeof(suff), numb);
         StrCat(path, sizeof(path), suff);
         g_hFile = OpenFile(path, "w+");
-        if(g_hFile == INVALID_HANDLE)
+        if(g_hFile == null)
         {
             if(client == 0)
             {
@@ -790,7 +762,7 @@ public Action CmdSaveGen(int client, int args)
             PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
             return Plugin_Handled;
         }
-        for(int f=0; f < g_iFrames; f++)
+        for(int f = 0; f < g_iFrames; f++)
         {
             g_hFile.WriteLine("%d,%.16f,%.16f", g_iGAIndividualInputsInt[f][i], g_fGAIndividualInputsFloat[f][i][0], g_fGAIndividualInputsFloat[f][i][1]);
         }
@@ -826,7 +798,7 @@ public Action CmdLoadGen(int client, int args)
     char tPath[64];
     strcopy(tPath, sizeof(tPath), path);
     int lastLoaded = 0;
-    for(int i=0; i < POPULATION; i++)
+    for(int i = 0; i < POPULATION_SIZE; i++)
     {
         path = tPath;
         char suff[8] = "-";
@@ -835,21 +807,21 @@ public Action CmdLoadGen(int client, int args)
         StrCat(suff, sizeof(suff), numb);
         StrCat(path, sizeof(path), suff);
         g_hFile = OpenFile(path, "r");
-        if(g_hFile == INVALID_HANDLE)
+        if(g_hFile == null)
         {
-        	if(i == 0)
-        	{
-	            if(client == 0)
-	            {
-	                PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
-	                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-	                return Plugin_Handled;
-	            }
-	            CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-	            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-	            return Plugin_Handled;
-        	}
-        	break;
+            if(i == 0)
+            {
+                if(client == 0)
+                {
+                    PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+                    PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+                    return Plugin_Handled;
+                }
+                CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+                return Plugin_Handled;
+            }
+            break;
         }
         int f;
         g_hFile.Seek(0, SEEK_SET);
@@ -879,39 +851,39 @@ public Action CmdLoadGen(int client, int args)
         }
 
         if (f > g_iFrames)
-        	g_iFrames = f;
+            g_iFrames = f;
         g_hFile.Close();   
         lastLoaded = i; 
     }
 
-    if(g_iFrames > MAXFRAMES)
+    if(g_iFrames > MAX_FRAMES)
     {
         if(client == 0)
-            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAXFRAMES);
+            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
         else
-            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
-        g_iFrames = MAXFRAMES;
+            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        g_iFrames = MAX_FRAMES;
     }  
 
-    if(lastLoaded + 1 < POPULATION)
+    if(lastLoaded + 1 < POPULATION_SIZE)
     {
-    	GeneratePopulation(lastLoaded + 1);
+        GeneratePopulation(lastLoaded + 1);
     }
     else
     {
-    	g_bPopulation = true;
-	    if(client == 0)
-	    {
-	    	PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
-	    	PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
-	    	PrintToServer("%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
-	    }
-	    else
-	    {
-	    	CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
-			CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
-			CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
-	    }    
+        g_bPopulation = true;
+        if(client == 0)
+        {
+            PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
+            PrintToServer("%s Loaded generation %s", g_cPrintPrefixNoColor, tPath);
+            PrintToServer("%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
+            CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, tPath);
+            CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+        }    
     }          
 
     return Plugin_Handled;
@@ -935,43 +907,43 @@ public Action CmdLoadGenFromRec(int client, int args)
     StrCat(path, sizeof(path), arg);
 
     int frames = 0;
-    int iFrameCounts[POPULATION];
+    int iFrameCounts[POPULATION_SIZE];
     int iLastLoaded = 0;
 
-    for(int i=0; i < POPULATION; i++)
+    for(int i = 0; i < POPULATION_SIZE; i++)
     {
-    	char individualPath[64];
-    	strcopy(individualPath, sizeof(individualPath), path);
-    	char index[8];
+        char individualPath[64];
+        strcopy(individualPath, sizeof(individualPath), path);
+        char index[8];
 
-    	if(i != 0)
-    	{
-    		IntToString(i, index, sizeof(index));
-    		StrCat(individualPath, sizeof(individualPath), index);
-    	}
+        if(i != 0)
+        {
+            IntToString(i, index, sizeof(index));
+            StrCat(individualPath, sizeof(individualPath), index);
+        }
 
-	    g_hFile = OpenFile(individualPath, "r");
+        g_hFile = OpenFile(individualPath, "r");
 
-	    if(g_hFile == INVALID_HANDLE)
-	    {
-	    	if (i == 0)
-	    	{
-		        if(client == 0)
-		        {
-		            PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
-		            PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-		            return Plugin_Handled;
-		        }
-		        CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
-		        PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
-		        return Plugin_Handled;
-	    	}
-	    	else
-	    	{
-	    		// reached last file
-	    		break;
-	    	}
-	    }
+        if(g_hFile == null)
+        {
+            if (i == 0)
+            {
+                if(client == 0)
+                {
+                    PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
+                    PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+                    return Plugin_Handled;
+                }
+                CPrintToChat(client, "%s Something went wrong :(", g_cPrintPrefix);
+                PrintToServer("%s Invalid file handle", g_cPrintPrefixNoColor);
+                return Plugin_Handled;
+            }
+            else
+            {
+                // reached last file
+                break;
+            }
+        }
 
         g_hFile.Seek(0, SEEK_SET);
         char buffer[128];
@@ -1000,12 +972,12 @@ public Action CmdLoadGenFromRec(int client, int args)
             }
 
             // Increment frame count
-        	f++;
+            f++;
         }
 
         if (f > frames)
         {
-        	frames = f;
+            frames = f;
         }
 
         iFrameCounts[i] = f;
@@ -1020,13 +992,13 @@ public Action CmdLoadGenFromRec(int client, int args)
         CPrintToChat(client, "%s Loaded %d recordings from %s", g_cPrintPrefix, iLastLoaded + 1, path);
 
     // set frame count
-    if(frames > MAXFRAMES)
+    if(frames > MAX_FRAMES)
     {
         if(client == 0)
-            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAXFRAMES);
+            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
         else
-            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
-        frames = MAXFRAMES;
+            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        frames = MAX_FRAMES;
     }
 
     g_iFrames = frames;
@@ -1038,101 +1010,24 @@ public Action CmdLoadGenFromRec(int client, int args)
     // Pad other runs to match longest one
     for(int i = 0; i < iLastLoaded; i++)
     {
-    	if(iFrameCounts[i] < frames)
-    	{
-    		Pad(i, iFrameCounts[i]);
-    	}
+        if(iFrameCounts[i] < frames)
+        {
+            Pad(i, iFrameCounts[i]);
+        }
     }
 
     // generate rest of Population
-    if(iLastLoaded < POPULATION)
+    if(iLastLoaded < POPULATION_SIZE)
     {
-    	GeneratePopulation(iLastLoaded + 1);
+        GeneratePopulation(iLastLoaded + 1);
     }
     else
     {
-		g_bPopulation = true;
-		MeasureFitness(0);
+        g_bPopulation = true;
+        MeasureFitness(0);
     }    
 
     return Plugin_Handled;
-}
-
-public void Pad(int individual, int startFrame)
-{
-	PrintToServer("Padding %d by %d frames", individual, g_iFrames - startFrame);
-	
-	for(int t=startFrame; t < g_iFrames; t++)
-    {
-        for(int i=0; i < sizeof(g_iPossibleButtons); i++)
-        {
-            // random key inputs
-            if(GetRandomFloat(0.0, 1.0) < 0.5)
-            {
-                if(g_iGAIndividualInputsInt[t][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
-                {
-                	// has button, remove
-                    g_iGAIndividualInputsInt[t][individual] &= ~g_iPossibleButtons[i];
-                }
-                else
-                {
-                	// doesn't have button, add
-                    g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
-                }
-            }
-                
-            // chance for inputs to be duplicated from previous tick
-            if(t != 0)
-            {
-                if(g_iGAIndividualInputsInt[t-1][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
-                {
-                	// previous tick has button
-                    if(GetRandomFloat(0.0, 1.0) < 0.9)
-                    {
-                    	// add to this
-                        g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
-                    }                            
-                }
-            }
-        }
-        g_fGAIndividualInputsFloat[t][individual][0] = g_fGAStartAng[0];
-        g_fGAIndividualInputsFloat[t][individual][1] = g_fGAStartAng[1];
-
-    	float prevPitch = g_fGAStartAng[0];
-    	float prevYaw = g_fGAStartAng[1];
-
-    	if (t > 0)
-    	{
-    		prevPitch = g_fGAIndividualInputsFloat[t - 1][individual][0];
-    		prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
-    	}
-
-        // random mouse movement
-        if(GetRandomFloat(0.0, 1.0) < 0.9)
-        {
-            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
-
-            if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
-            	g_fGAIndividualInputsFloat[t][individual][0] = -89.0;
-
-        	if (g_fGAIndividualInputsFloat[t][individual][0] > 89.0)
-            	g_fGAIndividualInputsFloat[t][individual][0] = 89.0;
-
-
-            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
-
-            if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
-            	g_fGAIndividualInputsFloat[t][individual][1] += 360.0;
-
-        	if (g_fGAIndividualInputsFloat[t][individual][1] > 180.0)
-            	g_fGAIndividualInputsFloat[t][individual][1] -= 360.0;
-        }
-        else
-        {
-        	g_fGAIndividualInputsFloat[t][individual][0] = prevPitch;
-        	g_fGAIndividualInputsFloat[t][individual][1] = prevYaw;
-        }
-    }	
 }
 
 public Action CmdSave(int client, int args)
@@ -1162,7 +1057,7 @@ public Action CmdSave(int client, int args)
     }
     
     g_hFile = OpenFile(path, "w+");
-    if(g_hFile == INVALID_HANDLE)
+    if(g_hFile == null)
     {
         if(client == 0)
             PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
@@ -1173,7 +1068,7 @@ public Action CmdSave(int client, int args)
     }
     g_hFile.WriteLine("%d", g_iFrames);
     g_hFile.WriteLine("%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f,%.16f", g_fGAStartPos[0], g_fGAStartPos[1], g_fGAStartPos[2], g_fGAStartAng[0], g_fGAStartAng[1], g_fGAStartAng[2], g_fGAEndPos[0], g_fGAEndPos[1], g_fGAEndPos[2]);
-    for(int i = 0; i<MAXCHECKPOINTS; i++)
+    for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
         if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
             g_hFile.WriteLine("%.16f,%.16f,%.16f", g_fGACheckPoints[i][0], g_fGACheckPoints[i][1], g_fGACheckPoints[i][2]);
@@ -1213,7 +1108,7 @@ public Action CmdLoad(int client, int args)
             CPrintToChat(client, "%s Can't find file %s.", g_cPrintPrefix, arg);
         return Plugin_Handled;
     }
-    if(g_hFile == INVALID_HANDLE)
+    if(g_hFile == null)
     {
         if(client == 0)
             PrintToServer("%s Something went wrong :(", g_cPrintPrefixNoColor);
@@ -1250,15 +1145,15 @@ public Action CmdLoad(int client, int args)
         
         if(n == 9)
         {
-            for(int i = 0; i<3; i++)
+            for(int i = 0; i < 3; i++)
             {
                 g_fGAStartPos[i] = StringToFloat(bu[i]);
             }
-            for(int i = 0; i<3; i++)
+            for(int i = 0; i < 3; i++)
             {
                 g_fGAStartAng[i] = StringToFloat(bu[i+3]);
             }
-            for(int i = 0; i<3; i++)
+            for(int i = 0; i < 3; i++)
             {
                 g_fGAEndPos[i] = StringToFloat(bu[i+6]);
             }
@@ -1274,7 +1169,7 @@ public Action CmdLoad(int client, int args)
             return Plugin_Handled;
         }
     }
-    for(int i=0; i<MAXCHECKPOINTS; i++)
+    for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
         g_fGACheckPoints[i] = { 0.0, 0.0, 0.0 };
     }
@@ -1286,7 +1181,7 @@ public Action CmdLoad(int client, int args)
         
         if(n == 3)
         {
-            for(int i=0; i<3; i++)
+            for(int i = 0; i < 3; i++)
             {
                 g_fGACheckPoints[cp][i] = StringToFloat(bu[i]);
             }            
@@ -1317,13 +1212,13 @@ public Action CmdLoad(int client, int args)
         DrawLines();
     }
 
-    if(g_iFrames > MAXFRAMES)
+    if(g_iFrames > MAX_FRAMES)
     {
         if(client == 0)
-            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAXFRAMES);
+            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
         else
-            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
-        g_iFrames = MAXFRAMES;
+            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        g_iFrames = MAX_FRAMES;
     }
 
     if(client == 0)
@@ -1384,13 +1279,13 @@ public Action CmdSetFrames(int client, int args)
             CPrintToChat(client, "%s Failed to parse number", g_cPrintPrefix);
         return Plugin_Handled;
     }
-    if(num > MAXFRAMES)
+    if(num > MAX_FRAMES)
     {
         if(client == 0)
-            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAXFRAMES);
+            PrintToServer("%s Max frames limit is %d!", g_cPrintPrefixNoColor, MAX_FRAMES);
         else
-            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAXFRAMES);
-        num = MAXFRAMES;
+            CPrintToChat(client, "%s Max frames limit is %d!", g_cPrintPrefix, MAX_FRAMES);
+        num = MAX_FRAMES;
     }
     g_iFrames = num;
     if(client == 0)
@@ -1489,9 +1384,9 @@ public Action CmdRemoveCheckpoint(int client, int args)
         return Plugin_Handled;
     }
     g_fGACheckPoints[num] = { 0.0, 0.0, 0.0 };
-    for(int i=num; i<MAXCHECKPOINTS; i++)
+    for(int i = num; i < MAX_CHECKPOINTS; i++)
     {
-        if(i < MAXCHECKPOINTS - 1)
+        if(i < MAX_CHECKPOINTS - 1)
             g_fGACheckPoints[i] = g_fGACheckPoints[i+1];
     } 
     CPrintToChat(client, "%s Checkpoint %d removed!", g_cPrintPrefix, num);
@@ -1510,7 +1405,7 @@ public Action CmdAddCheckpoint(int client, int args)
         PrintToServer("%s This command cannot be used from server console.", g_cPrintPrefixNoColor);
         return Plugin_Handled;
     }
-    for(int i=0; i<MAXCHECKPOINTS; i++)
+    for(int i = 0; i < MAX_CHECKPOINTS; i++)
     {
         if(g_fGACheckPoints[i][0] == 0 && g_fGACheckPoints[i][1] == 0 && g_fGACheckPoints[i][2] == 0)
         {
@@ -1520,7 +1415,7 @@ public Action CmdAddCheckpoint(int client, int args)
         }
         else
         {
-            if(i == MAXCHECKPOINTS-1)
+            if(i == MAX_CHECKPOINTS-1)
             {
                 CPrintToChat(client, "%s Checkpoint limit reached! Try deleting some.", g_cPrintPrefix);
                 return Plugin_Handled;
@@ -1590,7 +1485,7 @@ public Action CmdGen(int client, int args)
 
 public Action CmdSim(int client, int args)
 {
-	ServerCommand("host_timescale %f", g_fTimeScale);
+    ServerCommand("host_timescale %f", g_fTimeScale);
     MeasureFitness(0);
     return Plugin_Handled;
 }
@@ -1676,6 +1571,87 @@ public Action CmdPlay(int client, int args)
     return Plugin_Handled;
 }
 
+// ****************************************************************
+// Functions
+// ****************************************************************
+
+public void Pad(int individual, int startFrame)
+{
+    PrintToServer("Padding %d by %d frames", individual, g_iFrames - startFrame);
+    
+    for(int t = startFrame; t < g_iFrames; t++)
+    {
+        for(int i = 0; i < sizeof(g_iPossibleButtons); i++)
+        {
+            // random key inputs
+            if(GetRandomFloat(0.0, 1.0) < 0.5)
+            {
+                if(g_iGAIndividualInputsInt[t][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
+                {
+                    // has button, remove
+                    g_iGAIndividualInputsInt[t][individual] &= ~g_iPossibleButtons[i];
+                }
+                else
+                {
+                    // doesn't have button, add
+                    g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
+                }
+            }
+                
+            // chance for inputs to be duplicated from previous tick
+            if(t != 0)
+            {
+                if(g_iGAIndividualInputsInt[t-1][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
+                {
+                    // previous tick has button
+                    if(GetRandomFloat(0.0, 1.0) < 0.9)
+                    {
+                        // add to this
+                        g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
+                    }                            
+                }
+            }
+        }
+        g_fGAIndividualInputsFloat[t][individual][0] = g_fGAStartAng[0];
+        g_fGAIndividualInputsFloat[t][individual][1] = g_fGAStartAng[1];
+
+        float prevPitch = g_fGAStartAng[0];
+        float prevYaw = g_fGAStartAng[1];
+
+        if (t > 0)
+        {
+            prevPitch = g_fGAIndividualInputsFloat[t - 1][individual][0];
+            prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
+        }
+
+        // random mouse movement
+        if(GetRandomFloat(0.0, 1.0) < 0.9)
+        {
+            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
+
+            if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
+                g_fGAIndividualInputsFloat[t][individual][0] = -89.0;
+
+            if (g_fGAIndividualInputsFloat[t][individual][0] > 89.0)
+                g_fGAIndividualInputsFloat[t][individual][0] = 89.0;
+
+
+            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
+
+            if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
+                g_fGAIndividualInputsFloat[t][individual][1] += 360.0;
+
+            if (g_fGAIndividualInputsFloat[t][individual][1] > 180.0)
+                g_fGAIndividualInputsFloat[t][individual][1] -= 360.0;
+        }
+        else
+        {
+            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch;
+            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw;
+        }
+    }   
+}
+
 public Action Timer_SetupBot(Handle hTimer)
 {
     if (g_iBot != -1) {
@@ -1711,14 +1687,14 @@ public Action MeasureTimer(Handle timer, int index)
 }
 
 public void DrawLines() {
-    for(new i = 0; i < MAXCHECKPOINTS;i++) {
+    for(int i = 0; i < MAX_CHECKPOINTS; i++) {
         if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
         {
             if(i == 0)
             {
                 DrawLaser(g_fGAStartPos, g_fGACheckPoints[i], 0, 255, 0);
             } 
-            if(i+1<MAXCHECKPOINTS)
+            if(i+1<MAX_CHECKPOINTS)
             {
                 if(g_fGACheckPoints[i+1][0] != 0 && g_fGACheckPoints[i+1][1] != 0 && g_fGACheckPoints[i+1][2] != 0)
                 {
@@ -1744,13 +1720,13 @@ public void DrawLines() {
 //https://forums.alliedmods.net/showthread.php?t=190685
 public int DrawLaser(float start[3], float end[3], int red, int green, int blue)
 {
-    new ent = CreateEntityByName("env_beam");
+    int ent = CreateEntityByName("env_beam");
     if (ent != -1) {
         TeleportEntity(ent, start, NULL_VECTOR, NULL_VECTOR);
         SetEntityModel(ent, "sprites/laser.vmt");
         SetEntPropVector(ent, Prop_Data, "m_vecEndPos", end);
         DispatchKeyValue(ent, "targetname", "beam");
-        new String:buffer[32];
+        char buffer[32];
         Format(buffer, sizeof(buffer), "%d %d %d", red, green, blue);
         DispatchKeyValue(ent, "rendercolor", buffer); //color
         DispatchKeyValue(ent, "renderamt", "100");
@@ -1764,8 +1740,8 @@ public int DrawLaser(float start[3], float end[3], int red, int green, int blue)
 }
 
 public void HideLines() {
-    decl String:name[32];
-    for(new i = MaxClients+1; i <= GetMaxEntities(); i++)
+    char name[32];
+    for(int i = MaxClients + 1; i <= GetMaxEntities(); i++)
     {
         if(!IsValidEntity(i))
             continue;
@@ -1780,29 +1756,29 @@ public void HideLines() {
 
 void GeneratePopulation(int iStartIndex = 0)
 {
-	ServerCommand("host_timescale 1");
+    ServerCommand("host_timescale 1");
 
-    for(int p=iStartIndex; p < POPULATION; p++)
+    for(int p = iStartIndex; p < POPULATION_SIZE; p++)
     {
-    	// Set initial rotation to start angle
-    	g_fGAIndividualInputsFloat[0][p][0] = g_fGAStartAng[0];
+        // Set initial rotation to start angle
+        g_fGAIndividualInputsFloat[0][p][0] = g_fGAStartAng[0];
         g_fGAIndividualInputsFloat[0][p][1] = g_fGAStartAng[1];
 
-        for(int t=0; t < g_iFrames; t++)
+        for(int t = 0; t < g_iFrames; t++)
         {
-            for(int i=0; i < sizeof(g_iPossibleButtons); i++)
+            for(int i = 0; i < 5; i++)
             {
                 // random key inputs
                 if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                 {
                     if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
-                    	// has button, remove
+                        // has button, remove
                         g_iGAIndividualInputsInt[t][p] &= ~g_iPossibleButtons[i];
                     }
                     else
                     {
-                    	// doesn't have button, add
+                        // doesn't have button, add
                         g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                     }
                 }
@@ -1812,24 +1788,24 @@ void GeneratePopulation(int iStartIndex = 0)
                 {
                     if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
-                    	// previous tick has button
-                        if(GetRandomFloat(0.0, 1.0) < 0.9)
+                        // previous tick has button
+                        if(GetRandomFloat(0.0, 1.0) < 0.5)
                         {
-                        	// add to this
+                            // add to this
                             g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                         }                            
                     }
                 }
             }
             
-        	float prevPitch = g_fGAStartAng[0];
-        	float prevYaw = g_fGAStartAng[1];
+            float prevPitch = g_fGAStartAng[0];
+            float prevYaw = g_fGAStartAng[1];
 
-        	if (t > 0)
-        	{
-        		prevPitch = g_fGAIndividualInputsFloat[t - 1][p][0];
-        		prevYaw = g_fGAIndividualInputsFloat[t - 1][p][1];
-        	}
+            if (t > 0)
+            {
+                prevPitch = g_fGAIndividualInputsFloat[t - 1][p][0];
+                prevYaw = g_fGAIndividualInputsFloat[t - 1][p][1];
+            }
 
             // random mouse movement
             if(GetRandomFloat(0.0, 1.0) < 0.9)
@@ -1837,36 +1813,36 @@ void GeneratePopulation(int iStartIndex = 0)
                 g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
 
                 if (g_fGAIndividualInputsFloat[t][p][0] < -89.0)
-                	g_fGAIndividualInputsFloat[t][p][0] = -89.0;
+                    g_fGAIndividualInputsFloat[t][p][0] = -89.0;
 
-            	if (g_fGAIndividualInputsFloat[t][p][0] > 89.0)
-                	g_fGAIndividualInputsFloat[t][p][0] = 89.0;
+                if (g_fGAIndividualInputsFloat[t][p][0] > 89.0)
+                    g_fGAIndividualInputsFloat[t][p][0] = 89.0;
 
 
                 g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
 
                 if (g_fGAIndividualInputsFloat[t][p][1] < -180.0)
-                	g_fGAIndividualInputsFloat[t][p][1] += 360.0;
+                    g_fGAIndividualInputsFloat[t][p][1] += 360.0;
 
-            	if (g_fGAIndividualInputsFloat[t][p][1] > 180.0)
-                	g_fGAIndividualInputsFloat[t][p][1] -= 360.0;
+                if (g_fGAIndividualInputsFloat[t][p][1] > 180.0)
+                    g_fGAIndividualInputsFloat[t][p][1] -= 360.0;
             }
             else
             {
-            	g_fGAIndividualInputsFloat[t][p][0] = prevPitch;
-            	g_fGAIndividualInputsFloat[t][p][1] = prevYaw;
+                g_fGAIndividualInputsFloat[t][p][0] = prevPitch;
+                g_fGAIndividualInputsFloat[t][p][1] = prevYaw;
             }
         }
     }
     
     g_bPopulation = true;
     g_iCurrentGen = 0;
-    for(int i=0;i<POPULATION; i++)
+    for(int i = 0; i < POPULATION_SIZE; i++)
     {
         g_bGAIndividualMeasured[i] = false;
     }
 
-	PrintToServer("%s Population generated!", g_cPrintPrefixNoColor);
+    PrintToServer("%s Population generated!", g_cPrintPrefixNoColor);
     ServerCommand("host_timescale %f", g_fTimeScale);
 
     MeasureFitness(0);
@@ -1890,70 +1866,70 @@ public void CalculateFitness(int individual)
     
 
 
-    for(new i = -1; i < MAXCHECKPOINTS - 1;i++) {
-    	float temp[3];
+    for(int i = -1; i < MAX_CHECKPOINTS - 1; i++) {
+        float temp[3];
 
         if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
         {
-        	float currentToNext[3];
-        	float playerToCurrent[3];
-
-        	if(i == -1)
-        	{
-        		// start to first cp
-        		ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], playerPos, temp);
-        		SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, currentToNext);
-        		SubtractVectors(g_fGAStartPos, playerPos, playerToCurrent);
-        	}
-        	else
-        	{
-        		ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], playerPos, temp);
-        		SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], currentToNext);
-        		SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
-        	}             
-
-        	if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
-        	{
-        		// If dot product < 0
-        		// player has passed checkpoint i
-
-	            if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
-	            {
-	                cP = temp;
-	                lastCP = i;
-	            }
-        	}
-        }
-        else
-        {
-        	
+            float currentToNext[3];
+            float playerToCurrent[3];
 
             if(i == -1)
             {
-            	// no cps
+                // start to first cp
+                ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], playerPos, temp);
+                SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, currentToNext);
+                SubtractVectors(g_fGAStartPos, playerPos, playerToCurrent);
+            }
+            else
+            {
+                ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], playerPos, temp);
+                SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], currentToNext);
+                SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
+            }             
+
+            if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
+            {
+                // If dot product < 0
+                // player has passed checkpoint i
+
+                if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
+                {
+                    cP = temp;
+                    lastCP = i;
+                }
+            }
+        }
+        else
+        {
+            
+
+            if(i == -1)
+            {
+                // no cps
                 ClosestPoint(g_fGAEndPos, g_fGAStartPos, playerPos, cP);
             }
             else
             {
-            	float currentToNext[3];
-        		float playerToCurrent[3];
+                float currentToNext[3];
+                float playerToCurrent[3];
 
-            	// last cp was i
-            	ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, playerPos, temp);
-            	SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], currentToNext);
-        		SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
+                // last cp was i
+                ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, playerPos, temp);
+                SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], currentToNext);
+                SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
 
-        		if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
-	        	{
-	        		// If dot product < 0
-	        		// player has passed checkpoint i
+                if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
+                {
+                    // If dot product < 0
+                    // player has passed checkpoint i
 
-    	            if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
-		            {
-		                cP = temp;
-		                lastCP = i;
-		            }
-	        	}
+                    if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
+                    {
+                        cP = temp;
+                        lastCP = i;
+                    }
+                }
             }
 
             break;
@@ -1961,17 +1937,17 @@ public void CalculateFitness(int individual)
     }
     
     // Check for walls
-    Handle trace = TR_TraceRayFilterEx(playerPos, cP, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint, TraceRayDontHitSelf, g_iBot);
+    /*Handle trace = TR_TraceRayFilterEx(playerPos, cP, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint, TraceRayDontHitSelf, g_iBot);
     if(TR_DidHit(trace))
-	   g_fOverrideFitness = -10000000.0;
+       g_fOverrideFitness = -10000000.0;
    
-	CloseHandle(trace);
+    CloseHandle(trace);*/
     
     //PrintToServer("%s individual %d lastCP: %d", g_cPrintPrefixNoColor, individual, lastCP);
     
     float dist;
     
-    for(int i=0; i <= lastCP; i++)
+    for(int i = 0; i <= lastCP; i++)
     {
         if(i == 0)
         {
@@ -1987,7 +1963,7 @@ public void CalculateFitness(int individual)
         dist += GetVectorDistance(g_fGACheckPoints[lastCP], cP);
         
     // subtract distance from line
-    dist -= GetVectorDistance(cP, playerPos);
+    dist -= GetVectorDistance(cP, playerPos) * 0.5;
         
     g_fGAIndividualFitness[individual] = dist;
 
@@ -1998,7 +1974,7 @@ public void CalculateFitness(int individual)
 
     if (g_bMadeToEnd)
     {
-    	g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 1000;
+        g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 10;
     }
 
     g_bMadeToEnd = false;
@@ -2011,34 +1987,19 @@ public void CalculateFitness(int individual)
         int ent = DrawLaser(playerPos, cP, 255, 0, 0);
         CreateTimer(5.0, Timer_KillEnt, ent);
     }
-
-    // save individual to file and stop generation if fitness low enough
-    /*if(GAIndividualFitness[individual] < 50)
-    {
-        simulating = false;
-        file = OpenFile("/GA/", "w+");
-        for(int i=0; i<simFrames; i++)
-        {
-            file.WriteLine("%d,%f,%f", 
-                GAIndividualInputsInt[i][individual],
-                GAIndividualInputsFloat[i][individual][0],
-                GAIndividualInputsFloat[i][individual][1]);
-        }
-        file.Close();
-    }*/
 }
 
 public bool TraceRayDontHitSelf(int entity, int contentsMask, any data)
 {
-	// Don't return players or player projectiles
-	int entity_owner;
-	entity_owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
+    // Don't return players or player projectiles
+    int entity_owner;
+    entity_owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
 
-	if(entity != data && !(0 < entity <= MaxClients) && !(0 < entity_owner <= MaxClients))
-	{
-		return true;
-	}
-	return false;
+    if(entity != data && !(0 < entity <= MaxClients) && !(0 < entity_owner <= MaxClients))
+    {
+        return true;
+    }
+    return false;
 }
 
 
@@ -2066,7 +2027,7 @@ public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
     float lengthSqrAB = AB[0] * AB[0] + AB[1] * AB[1] + AB[2] * AB[2];
     float t = (AP[0] * AB[0] + AP[1] * AB[1] + AP[2] * AB[2]) / lengthSqrAB;
     if(t < 0.0)
-     	t = 0.0;
+        t = 0.0;
     if(t > 1.0)
         t = 1.0;
     ScaleVector(AB, t);
@@ -2075,157 +2036,216 @@ public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
 
 public void Breed()
 {
-	ServerCommand("host_timescale 1");
+    ServerCommand("host_timescale 1");
 
-    int fittest[POPULATION/2];
-    float order[POPULATION];
-    for(int i=0; i<POPULATION;i++)
-        order[i] = g_fGAIndividualFitness[i];
-
-    SortFloats(order, POPULATION, Sort_Descending);
-    for(int i=0; i<(POPULATION/2)-LUCKYFEW; i++)
+    int fittest[POPULATION_SIZE/2];
+    float order[POPULATION_SIZE];
+    for(int i = 0; i < POPULATION_SIZE; i++)
     {
-        for(int e=0; e<POPULATION; e++)
+        order[i] = g_fGAIndividualFitness[i];
+    }
+
+    SortFloats(order, POPULATION_SIZE, Sort_Descending);
+    for(int i = 0; i < (POPULATION_SIZE / 2) - LUCKY_FEW; i++)
+    {
+        for(int j = 0; j < POPULATION_SIZE; j++)
         {
-            if(order[i] == g_fGAIndividualFitness[e])
-                fittest[i] = e;
+            if(order[i] == g_fGAIndividualFitness[j])
+                fittest[i] = j;
         }
     }
     
     // make lucky few individuals parents even if they're not the fittest
-    for(int i=0; i<LUCKYFEW; i++)
+    for(int i = 0; i < LUCKY_FEW; i++)
     {
-    	bool t = true;
-    	while(t)
-    	{
-    		int r = GetRandomInt(0, POPULATION-1);
-    		bool tt;
-    		for(int e=0; e<POPULATION/2; e++)
-    		{
-    			if(fittest[e] == r)
-    				tt = true;
-    		}
-    		if(!tt)
-    		{
-    			fittest[(POPULATION/2)-LUCKYFEW+i] = r;
-    			t = false;
-    		}
-    	}
+        bool t = true;
+        while(t)
+        {
+            int r = GetRandomInt(0, POPULATION_SIZE-1);
+            bool tt;
+            for(int j = 0; j < POPULATION_SIZE / 2; j++)
+            {
+                if(fittest[j] == r)
+                {
+                    tt = true;
+                }
+            }
+            if(!tt)
+            {
+                fittest[(POPULATION_SIZE / 2) - LUCKY_FEW + i] = r;
+                t = false;
+            }
+        }
     }
     
     // pair parents randomly
-    int parents[POPULATION/4][2];
-    bool taken[POPULATION/2];
+    int parents[POPULATION_SIZE/4][2];
+    bool taken[POPULATION_SIZE/2];
     int par = 0;
-    for(int i=0; i<POPULATION/2; i++)
+    for(int i = 0; i < POPULATION_SIZE / 2; i++)
     {
         if(!taken[i])
         {
-            int rand = GetRandomInt(0, (POPULATION/2) - 1);
+            int rand = GetRandomInt(0, (POPULATION_SIZE/2) - 1);
             while(taken[rand] || rand == i)
-                rand = GetRandomInt(0, (POPULATION/2) - 1);
+                rand = GetRandomInt(0, (POPULATION_SIZE/2) - 1);
             
-            parents[par][0] = i;
-            parents[par][1] = rand;
+            parents[par][0] = fittest[i];
+            parents[par][1] = fittest[rand];
             taken[i] = true;
             taken[rand] = true;
             par++;
         }
     }
-    for(int p=0; p<POPULATION/4; p++)
+
+    // init array for new children
+    int iChildrenInputsInt[MAX_FRAMES][POPULATION_SIZE/2];
+    float fChildrenInputsFloat[MAX_FRAMES][POPULATION_SIZE/2][2];
+
+    // loop through parents
+    for(int p = 0; p < POPULATION_SIZE / 4; p++)
     {
-        for(int i=0; i<POPULATION; i++)
+        // two-point crossover
+        int iSize = g_iFrames - 1;
+        int iCxPoint1 = GetRandomInt(1, iSize);
+        int iCxPoint2 = GetRandomInt(1, iSize - 1);
+
+        if (iCxPoint2 >= iCxPoint1)
         {
-            bool cont = false;
-            for(int e=0; e<POPULATION/2; e++)
-            {
-                if(fittest[e] == i)
-                    cont = true;
-            }
-            if(cont)
-                continue;
-            
-            // overwrite least fittest with children
-            for(int t=0; t<g_iFrames; t++)
+            iCxPoint2 += 1;
+        }
+        else
+        {
+            // swap
+            int iTemp = iCxPoint1;
+            iCxPoint1 = iCxPoint2;
+            iCxPoint2 = iTemp;
+        }
+
+        // Loop through both parents
+        for (int iParent = 0; iParent < 2; iParent++)
+        {
+            int iChildIndex = p*2 + iParent;
+
+            // Loop through frames
+            for(int t = 0; t < g_iFrames; t++)
             {            
-                // Get parts from both parents randomly
-                for(int a=0; a<5; a++)
+                // Get genes from other parent if frame is between crossover points
+                if(t >= iCxPoint1 && t <= iCxPoint2)
                 {
-                    int cross = GetRandomInt(0, 1);
-                    if(g_iGAIndividualInputsInt[t][parents[p][cross]] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
+                    iParent = iParent == 0 ? 1 : 0;
+                }
+
+                // Get buttons from parent
+                for(int a = 0; a < 5; a++)
+                {
+                    // Check if parent has button
+                    if(g_iGAIndividualInputsInt[t][parents[p][iParent]] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
                     {
-                    	// parent has button, add to this
-                    	g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
+                        // parent has button, add to child
+                        iChildrenInputsInt[t][iChildIndex] |= g_iPossibleButtons[a];
                     }
                     else
                     {
-                    	// parent does not have button, remove from this
-                        g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
+                        // parent does not have button, remove from child
+                        iChildrenInputsInt[t][iChildIndex] &= ~g_iPossibleButtons[a];
                     }
 
                     // random mutations
                     if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                     {
-                        if(g_iGAIndividualInputsInt[t][i] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
+                        if(iChildrenInputsInt[t][iChildIndex] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
                         {
-                        	// has button, remove
-                            g_iGAIndividualInputsInt[t][i] &= ~g_iPossibleButtons[a];
+                            // has button, remove
+                            iChildrenInputsInt[t][iChildIndex] &= ~g_iPossibleButtons[a];
                         }
                         else
                         {                            
-                        	// doesn't have button, add
-                            g_iGAIndividualInputsInt[t][i] |= g_iPossibleButtons[a];
+                            // doesn't have button, add
+                            iChildrenInputsInt[t][iChildIndex] |= g_iPossibleButtons[a];
                         }
                     }
                 }
 
-                for(int a=0; a<2; a++)
+                // Get angles from parents
+                for(int a = 0; a < 2; a++)
                 {
-                    int cross = GetRandomInt(0, 1);
-                    g_fGAIndividualInputsFloat[t][i][a] = g_fGAIndividualInputsFloat[t][parents[p][cross]][a];
+                    fChildrenInputsFloat[t][iChildIndex][a] = g_fGAIndividualInputsFloat[t][parents[p][iParent]][a];
                 }
 
                 // random mutations
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
-                	float val = GetRandomFloat(-0.1, 0.1);
-                	//g_fGAIndividualInputsFloat[t][i][0] += val;
+                    float val = GetRandomFloat(-0.1, 0.1);
 
-                	// Change all future ticks rotation as well
-                	for(int j = t; j < g_iFrames; j++)
-                	{
-	                    g_fGAIndividualInputsFloat[j][i][0] += val;
+                    // Change all future ticks rotation as well
+                    for(int j = t; j < g_iFrames; j++)
+                    {
+                        fChildrenInputsFloat[j][iChildIndex][0] += val;
 
-	                    if (g_fGAIndividualInputsFloat[j][i][0] < -89.0)
-	                    	g_fGAIndividualInputsFloat[j][i][0] = -89.0;
+                        if (fChildrenInputsFloat[j][iChildIndex][0] < -89.0)
+                            fChildrenInputsFloat[j][iChildIndex][0] = -89.0;
 
-	                	if (g_fGAIndividualInputsFloat[j][i][0] > 89.0)
-	                    	g_fGAIndividualInputsFloat[j][i][0] = 89.0;
-                	}
+                        if (fChildrenInputsFloat[j][iChildIndex][0] > 89.0)
+                            fChildrenInputsFloat[j][iChildIndex][0] = 89.0;
+                    }
 
                 }
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
                     float val = GetRandomFloat(-0.1, 0.1);
-                    //g_fGAIndividualInputsFloat[t][i][1] += val;
 
-                	// Change all future ticks rotation as well
-                	for(int j = t; j < g_iFrames; j++)
-                	{
-	                    g_fGAIndividualInputsFloat[j][i][1] += val;
+                    // Change all future ticks rotation as well
+                    for(int j = t; j < g_iFrames; j++)
+                    {
+                        fChildrenInputsFloat[j][iChildIndex][1] += val;
 
-                        if (g_fGAIndividualInputsFloat[j][i][1] < -180.0)
-                    		g_fGAIndividualInputsFloat[j][i][1] += 360.0;
+                        if (fChildrenInputsFloat[j][iChildIndex][1] < -180.0)
+                            fChildrenInputsFloat[j][iChildIndex][1] += 360.0;
 
-	                	if (g_fGAIndividualInputsFloat[j][i][1] > 180.0)
-	                    	g_fGAIndividualInputsFloat[j][i][1] -= 360.0;
-                	}
-
+                        if (fChildrenInputsFloat[j][iChildIndex][1] > 180.0)
+                            fChildrenInputsFloat[j][iChildIndex][1] -= 360.0;
+                    }
                 }
             }
-            g_bGAIndividualMeasured[i] = false;
         }
     }
+
+    // overwrite least fittest with new children
+    int iLastUsedChild = 0;
+    for(int i = 0; i < POPULATION_SIZE; i++)
+    {
+        // Check if individual is a parent
+        bool bParent = false;
+        for(int j = 0; j < POPULATION_SIZE / 4; j++)
+        {
+            if (parents[j][0] == i || parents[j][1] == i)
+            {
+                bParent = true;
+            }
+        }
+        if(bParent)
+        {
+            continue;
+        }
+        
+        // overwrite frames
+        for (int j = 0; j < g_iFrames; j++)
+        {
+            g_iGAIndividualInputsInt[j][i] = iChildrenInputsInt[j][iLastUsedChild];
+            g_fGAIndividualInputsFloat[j][i][0] = fChildrenInputsFloat[j][iLastUsedChild][0];
+            g_fGAIndividualInputsFloat[j][i][1] = fChildrenInputsFloat[j][iLastUsedChild][1];
+        }
+        
+        g_bGAIndividualMeasured[i] = false;
+
+        iLastUsedChild++;
+        if (iLastUsedChild >= (POPULATION_SIZE/2) - 1)
+        {
+            break;
+        }
+    }
+
     g_iCurrentGen++;
     PrintToServer("%s Generation %d breeded!", g_cPrintPrefixNoColor, g_iCurrentGen);
     ServerCommand("host_timescale %f", g_fTimeScale);    
@@ -2235,7 +2255,7 @@ public void Breed()
 public void StopPlayback()
 {
     g_bPlayback = false;
-    if(g_hFile != INVALID_HANDLE)
+    if(g_hFile != null)
         g_hFile.Close();
     CPrintToChatAll("%s Playback stopped!", g_cPrintPrefix);
 }
