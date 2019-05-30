@@ -34,54 +34,54 @@
 // Constants
 // ****************************************************************
 #define MAX_CHECKPOINTS 100
-#define MAX_FRAMES 5000     // about 75 seconds (assuming 66.6 ticks/s)
-#define POPULATION_SIZE 64
-#define LUCKY_FEW 8
+#define MAX_FRAMES 1000         // Max length of an individual, about 15 seconds (assuming 66.6 ticks/s)
+#define POPULATION_SIZE 2000
+#define LUCKY_FEW 200           // Individuals not part of the fittest chosen to be parents
 
 // ****************************************************************
 // Global variables
 // ****************************************************************
-bool g_bRecording;
-bool g_bPlayback;
-bool g_bSimulating;
-bool g_bGAIndividualMeasured[POPULATION_SIZE];
-bool g_bPopulation;
-bool g_bGAplayback;
-bool g_bDraw;
-bool g_bMadeToEnd;
+bool g_bRecording;                              // Player recording status
+bool g_bPlayback;                               // Player recording playback status
+bool g_bSimulating;                             // Individual simulation status
+bool g_bGAIndividualMeasured[POPULATION_SIZE];  // Population individuals measured status
+bool g_bPopulation;                             // Population existence status
+bool g_bGAPlayback;                             // Generated individual playback status
+bool g_bDraw;                                   // Debug line draw status
+bool g_bMadeToEnd;                              // Individual reached end position status
 
-int g_iBot = -1;
-int g_iBotTeam = 2;
-int g_iPossibleButtons[5] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT};
-int g_iSimIndex;
-int g_iSimCurrentFrame;
-int g_iTargetGen;
-int g_iCurrentGen;
-int g_iGAIndividualInputsInt[MAX_FRAMES][POPULATION_SIZE];
-int g_iFrames;
-int g_iRecordingClient = -1;
-int g_iLeftOverFrames = 0;
+int g_iBot = -1;                                // Bot client index
+int g_iBotTeam = 2;                             // Bot team
+int g_iPossibleButtons[5] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT};  // Buttons that can be generated
+int g_iSimIndex;                                // Individual index being simulated
+int g_iSimCurrentFrame;                         // Current frame of simulation
+int g_iTargetGen;                               // Target generation to generate until
+int g_iCurrentGen;                              // Current generation index
+int g_iGAIndividualInputsInt[MAX_FRAMES][POPULATION_SIZE];  // Button inputs of individuals
+int g_iFrames;                                  // Frame cutoff (chromosome length)
+int g_iRecordingClient = -1;                    // Recording client index
+int g_iLeftOverFrames = 0;                      // Time saved by individual when reaching end
 
-float g_fTimeScale = 1000.0;
-float g_fGAIndividualInputsFloat[MAX_FRAMES][POPULATION_SIZE][2];
-float g_fGAIndividualFitness[POPULATION_SIZE];
-float g_fGAStartPos[3];
-float g_fGAStartAng[3];
-float g_fGAEndPos[3];
-float g_fGACheckPoints[MAX_CHECKPOINTS][3];
-float g_fTelePos[3] = {0.0, 0.0, 0.0};
-float g_fOverrideFitness;
-float g_fLastPos[3];
-float g_fMutationChance = 0.05;
-float g_fRotationMutationChance = 0.05;
-float g_fEndCutoff = 400.0;
+float g_fTimeScale = 1000.0;                    // Timescale used for simulating
+float g_fGAIndividualInputsFloat[MAX_FRAMES][POPULATION_SIZE][2];   // Angle inputs of individuals
+float g_fGAIndividualFitness[POPULATION_SIZE];  // Fitness of individuals
+float g_fGAStartPos[3];                         // Starting position
+float g_fGAStartAng[3];                         // Starting angle
+float g_fGAEndPos[3];                           // End position of fitness line
+float g_fGACheckPoints[MAX_CHECKPOINTS][3];     // Checkpoints of fitness line
+float g_fTelePos[3] = {0.0, 0.0, 0.0};          // Position where individual teleported
+float g_fOverrideFitness;                       // Override to use for individual fitness
+float g_fLastPos[3];                            // Position of individual during last tick
+float g_fMutationChance = 0.05;                 // Button mutation chance
+float g_fRotationMutationChance = 0.05;         // Angles mutation chance
+float g_fEndCutoff = 400.0;                     // Distance from end position to end simulation
 
-File g_hFile;
+File g_hFile;                                   // File handle
 
-char g_cBotName[] = "GA-BOT";
-char g_cPrintPrefix[] = "[{orange}GA{default}]";
-char g_cPrintPrefixNoColor[] = "[GA]";
-char g_cLastRecord[64];
+char g_cBotName[] = "GA-BOT";                       // Name of bot
+char g_cPrintPrefix[] = "[{orange}GA{default}]";    // Chat prefix for prints
+char g_cPrintPrefixNoColor[] = "[GA]";              // Prefix for server console prints
+char g_cLastRecord[64];                             // Name of last player recording
 
 // ****************************************************************
 // Plugin info
@@ -235,7 +235,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         if(client == g_iBot)
         {
             // Check if individual in population has already been measured
-            if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAplayback)
+            if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAPlayback)
             {
                 g_iSimIndex++;
                 
@@ -254,7 +254,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                         }
                     }
 
-                    PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                    PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
 
                     g_bSimulating = false;
 
@@ -281,9 +281,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 CalculateFitness(g_iSimIndex);
 
                 // Return if playing back instead of measuring
-                if(g_bGAplayback)
+                if(g_bGAPlayback)
                 {
-                    g_bGAplayback = false;
+                    g_bGAPlayback = false;
                     CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
                     return Plugin_Continue;
                 }
@@ -310,7 +310,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                         }
                     }
 
-                    PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                    PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
 
                     // Continue to the next generation or stop looping
                     if(g_iTargetGen > g_iCurrentGen)
@@ -349,9 +349,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     CalculateFitness(g_iSimIndex);
 
                     // Return if playing back instead of measuring
-                    if(g_bGAplayback)
+                    if(g_bGAPlayback)
                     {
-                        g_bGAplayback = false;
+                        g_bGAPlayback = false;
                         g_bSimulating = false;
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
                         return Plugin_Continue;
@@ -378,7 +378,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                             }
                         }
 
-                        PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                        PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
 
                         // Continue to the next generation or stop looping
                         if(g_iTargetGen > g_iCurrentGen)
@@ -407,12 +407,12 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
                     CalculateFitness(g_iSimIndex);
 
-                    PrintToServer("%d reached the end in %d frames! (%f)", g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
+                    PrintToServer("%s %d reached the end in %d frames! (%f)", g_cPrintPrefixNoColor, g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
 
                     // Return if playing back instead of measuring
-                    if(g_bGAplayback)
+                    if(g_bGAPlayback)
                     {
-                        g_bGAplayback = false;
+                        g_bGAPlayback = false;
                         g_bSimulating = false;
                         CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
                         return Plugin_Continue;
@@ -439,7 +439,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                             }
                         }
 
-                        PrintToServer("Best fitness of generation %d: %d (%f)", g_iCurrentGen, fittestIndex, bestFitness);
+                        PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
 
                         // Continue to the next generation or stop looping
                         if(g_iTargetGen > g_iCurrentGen)
@@ -757,7 +757,7 @@ public Action CmdRemoveRecord(int client, int args)
     // (compare path to recording root directory)
     if(strcmp(cPath, "/GA/rec/", true) == 0)
     {
-        PrintToServer("Couldn't find recording %s to delete", cPath);
+        PrintToServer("%s Couldn't find recording %s to delete", g_cPrintPrefixNoColor, cPath);
         return Plugin_Handled;
     }
     
@@ -766,16 +766,16 @@ public Action CmdRemoveRecord(int client, int args)
     {
         if(DeleteFile(cPath, false))
         {
-            PrintToServer("Deleted recording %s", cPath);
+            PrintToServer("%2 Deleted recording %s", g_cPrintPrefixNoColor, cPath);
         }
         else
         {
-            PrintToServer("Failed to delete recording %s", cPath);
+            PrintToServer("%s Failed to delete recording %s", g_cPrintPrefixNoColor, cPath);
         }
     }
     else
     {
-        PrintToServer("Couldn't find recording %s to delete, file doesn't exist", cPath);
+        PrintToServer("%s Couldn't find recording %s to delete, file doesn't exist", g_cPrintPrefixNoColor, cPath);
     }
 
     return Plugin_Handled;
@@ -917,10 +917,10 @@ public Action CmdSaveGen(int client, int args)
     StrCat(cPath, sizeof(cPath), arg);
     
     // Increment index if file with same name already exists
-    int i = 0;
+    int iSuffix = 0;
     while(FileExists(cPath))
     {
-        i++;
+        iSuffix++;
 
         // Append name to path
         cPath = "/GA/gen/";
@@ -928,7 +928,7 @@ public Action CmdSaveGen(int client, int args)
 
         // Append index to path
         char num[8];
-        IntToString(i, num, sizeof(num));
+        IntToString(iSuffix, num, sizeof(num));
         StrCat(cPath, sizeof(cPath), num);
     }
 
@@ -1151,7 +1151,7 @@ public Action CmdLoadGen(int client, int args)
         {
             CPrintToChat(client, "%s Frames set to %d", g_cPrintPrefix, g_iFrames);
             CPrintToChat(client, "%s Loaded generation %s", g_cPrintPrefix, cBasePath);
-            CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefixNoColor);
+            CPrintToChat(client, "%s You should run 'ga_sim' to calculate fitness values", g_cPrintPrefix);
         }    
     }          
 
@@ -1367,10 +1367,10 @@ public Action CmdSaveConfig(int client, int args)
     StrCat(cPath, sizeof(cPath), arg);
     
     // Increment file path if name already exists
-    int i = 0;
+    int iSuffix = 0;
     while(FileExists(cPath))
     {
-        i++;
+        iSuffix++;
 
         // Append name to path
         cPath = "/GA/cfg/";
@@ -1378,7 +1378,7 @@ public Action CmdSaveConfig(int client, int args)
 
         // Append index to path
         char num[8];
-        IntToString(i, num, sizeof(num));
+        IntToString(iSuffix, num, sizeof(num));
         StrCat(cPath, sizeof(cPath), num);
     }
     
@@ -1901,7 +1901,7 @@ public Action CmdRemoveCheckpoint(int client, int args)
     }
 
     // Reset last checkpoint
-    // Will be a duplicate if all checkpoints are assigned before removing one
+    // Will be a duplicate if all checkpoints are bAssigned before removing one
     g_fGACheckPoints[MAX_CHECKPOINTS - 1] = { 0.0, 0.0, 0.0 };
 
     CPrintToChat(client, "%s Checkpoint %d removed!", g_cPrintPrefix, iCP);
@@ -2153,7 +2153,7 @@ public Action CmdPlay(int client, int args)
     if(StringToIntEx(arg, index))
     {
         g_iSimIndex = index;
-        g_bGAplayback = true;
+        g_bGAPlayback = true;
         MeasureFitness(index);
         CPrintToChat(client, "%s Playing %d-%d", g_cPrintPrefix, g_iCurrentGen, index);
     }        
@@ -2169,38 +2169,40 @@ public Action CmdPlay(int client, int args)
 // Functions
 // ****************************************************************
 
+// Summary:
+// Pad length of individual with random inputs
 public void Pad(int individual, int startFrame)
 {
-    PrintToServer("Padding %d by %d frames", individual, g_iFrames - startFrame);
+    PrintToServer("%s Padding %d by %d frames", g_cPrintPrefixNoColor, individual, g_iFrames - startFrame);
     
     for(int t = startFrame; t < g_iFrames; t++)
     {
         for(int i = 0; i < sizeof(g_iPossibleButtons); i++)
         {
-            // random key inputs
-            if(GetRandomFloat(0.0, 1.0) < 0.5)
+            // Random buttons
+            if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
             {
                 if(g_iGAIndividualInputsInt[t][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                 {
-                    // has button, remove
+                    // Has button, remove
                     g_iGAIndividualInputsInt[t][individual] &= ~g_iPossibleButtons[i];
                 }
                 else
                 {
-                    // doesn't have button, add
+                    // Doesn't have button, add
                     g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
                 }
             }
                 
-            // chance for inputs to be duplicated from previous tick
+            // Chance for inputs to be duplicated from previous tick
             if(t != 0)
             {
+                // Check if previous frame has button
                 if(g_iGAIndividualInputsInt[t-1][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                 {
-                    // previous tick has button
                     if(GetRandomFloat(0.0, 1.0) < 0.9)
                     {
-                        // add to this
+                        // Add to this frame
                         g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
                     }                            
                 }
@@ -2218,25 +2220,33 @@ public void Pad(int individual, int startFrame)
             prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
         }
 
-        // random mouse movement
-        if(GetRandomFloat(0.0, 1.0) < 0.9)
+        // Random mouse movement
+        if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
         {
             g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
 
             if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
+            {
                 g_fGAIndividualInputsFloat[t][individual][0] = -89.0;
+            }
 
             if (g_fGAIndividualInputsFloat[t][individual][0] > 89.0)
+            {
                 g_fGAIndividualInputsFloat[t][individual][0] = 89.0;
+            }
 
 
             g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
 
             if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
+            {
                 g_fGAIndividualInputsFloat[t][individual][1] += 360.0;
+            }
 
             if (g_fGAIndividualInputsFloat[t][individual][1] > 180.0)
+            {
                 g_fGAIndividualInputsFloat[t][individual][1] -= 360.0;
+            }
         }
         else
         {
@@ -2246,6 +2256,8 @@ public void Pad(int individual, int startFrame)
     }   
 }
 
+// Summary:
+// Timer for spawning bot
 public Action Timer_SetupBot(Handle hTimer)
 {
     if (g_iBot != -1)
@@ -2257,7 +2269,7 @@ public Action Timer_SetupBot(Handle hTimer)
     
     if (!IsClientInGame(g_iBot))
     {
-        SetFailState("%s", "Cannot create bot");
+        SetFailState("%s", "Couldn't create bot");
     }
 
     ChangeClientTeam(g_iBot, g_iBotTeam);
@@ -2265,12 +2277,18 @@ public Action Timer_SetupBot(Handle hTimer)
     ServerCommand("mp_waitingforplayers_cancel 1;");
 }
 
+// Summary:
+// Timer for killing an entity
 public Action Timer_KillEnt(Handle hTimer, int ent)
 {
     if(IsValidEntity(ent))
+    {
         AcceptEntityInput(ent, "Kill");
+    }
 }
 
+// Summary:
+// Timer for measuring individual
 public Action MeasureTimer(Handle timer, int index)
 {
     g_iSimIndex = index;
@@ -2278,42 +2296,62 @@ public Action MeasureTimer(Handle timer, int index)
     g_bSimulating = true;
 }
 
-public void DrawLines() {
-    for(int i = 0; i < MAX_CHECKPOINTS; i++) {
+// Summary:
+// Draws debug lines to all clients
+public void DrawLines() 
+{
+    // Draw laser between start position, all checkpoints and end position
+    for(int i = 0; i < MAX_CHECKPOINTS; i++) 
+    {
+        // Check if checkpoint is valid
         if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
         {
             if(i == 0)
             {
+                // Laser from start position to first checkpoint
                 DrawLaser(g_fGAStartPos, g_fGACheckPoints[i], 0, 255, 0);
             } 
-            if(i+1<MAX_CHECKPOINTS)
+
+            if(i + 1 < MAX_CHECKPOINTS)
             {
-                if(g_fGACheckPoints[i+1][0] != 0 && g_fGACheckPoints[i+1][1] != 0 && g_fGACheckPoints[i+1][2] != 0)
+                // Check if checkpoint [i + 1] is valid
+                if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
                 {
-                    DrawLaser(g_fGACheckPoints[i], g_fGACheckPoints[i+1], 0, 255, 0);
+                    // Laser from checkpoint i to i + 1
+                    DrawLaser(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], 0, 255, 0);
                 }
                 else
                 {
+                    // Laser to end
                     DrawLaser(g_fGACheckPoints[i], g_fGAEndPos, 0, 255, 0);
                 }
+            }
+            else
+            {
+                // Laser to end
+                DrawLaser(g_fGACheckPoints[i], g_fGAEndPos, 0, 255, 0);
             }
         }
         else
         {
-            // no cps
             if(i == 0)
             {
+                // No checkpoints
                 DrawLaser(g_fGAStartPos, g_fGAEndPos, 0, 255, 0);
             }
         }
     }
 }
 
-//https://forums.alliedmods.net/showthread.php?t=190685
+// Summary:
+// Draw a laser beam to all clients
+// https://forums.alliedmods.net/showthread.php?t=190685
 public int DrawLaser(float start[3], float end[3], int red, int green, int blue)
 {
     int ent = CreateEntityByName("env_beam");
-    if (ent != -1) {
+
+    if (ent != -1) 
+    {
         TeleportEntity(ent, start, NULL_VECTOR, NULL_VECTOR);
         SetEntityModel(ent, "sprites/laser.vmt");
         SetEntPropVector(ent, Prop_Data, "m_vecEndPos", end);
@@ -2328,28 +2366,42 @@ public int DrawLaser(float start[3], float end[3], int red, int green, int blue)
         ActivateEntity(ent);
         AcceptEntityInput(ent, "TurnOn");
     }
+
     return ent;
 }
 
+// Summary:
+// Hide debug lines
 public void HideLines() {
     char name[32];
+
+    // Loop through entities
+    // starting after client entities
     for(int i = MaxClients + 1; i <= GetMaxEntities(); i++)
     {
         if(!IsValidEntity(i))
-            continue;
-    
-        if(GetEdictClassname(i,name,sizeof(name)))
         {
-             if(StrEqual("env_beam",name,false))
+            continue;
+        }
+    
+        if(GetEdictClassname(i, name, sizeof(name)))
+        {
+            if(StrEqual("env_beam", name, false))
+            {
                 RemoveEdict(i);
+            }
         }
     }
 }
 
+// Summary:
+// Generate a population
 void GeneratePopulation(int iStartIndex = 0)
 {
+    // Reset timescale to avoid client timeout when server freezes
     ServerCommand("host_timescale 1");
 
+    // Loop through individuals
     for(int p = iStartIndex; p < POPULATION_SIZE; p++)
     {
         // Set initial rotation to start angle
@@ -2360,30 +2412,30 @@ void GeneratePopulation(int iStartIndex = 0)
         {
             for(int i = 0; i < 5; i++)
             {
-                // random key inputs
+                // Random key inputs
                 if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                 {
                     if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
-                        // has button, remove
+                        // Has button, remove
                         g_iGAIndividualInputsInt[t][p] &= ~g_iPossibleButtons[i];
                     }
                     else
                     {
-                        // doesn't have button, add
+                        // Doesn't have button, add
                         g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                     }
                 }
                     
-                // chance for inputs to be duplicated from previous tick
+                // Chance for inputs to be duplicated from previous tick
                 if(t != 0)
                 {
                     if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
-                        // previous tick has button
+                        // Previous tick has button
                         if(GetRandomFloat(0.0, 1.0) < 0.5)
                         {
-                            // add to this
+                            // Add to this
                             g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                         }                            
                     }
@@ -2399,25 +2451,33 @@ void GeneratePopulation(int iStartIndex = 0)
                 prevYaw = g_fGAIndividualInputsFloat[t - 1][p][1];
             }
 
-            // random mouse movement
-            if(GetRandomFloat(0.0, 1.0) < 0.9)
+            // Random mouse movement
+            if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
             {
-                g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
+                g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-0.1, 0.1);
 
                 if (g_fGAIndividualInputsFloat[t][p][0] < -89.0)
+                {
                     g_fGAIndividualInputsFloat[t][p][0] = -89.0;
+                }
 
                 if (g_fGAIndividualInputsFloat[t][p][0] > 89.0)
+                {
                     g_fGAIndividualInputsFloat[t][p][0] = 89.0;
+                }
 
 
                 g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
 
                 if (g_fGAIndividualInputsFloat[t][p][1] < -180.0)
+                {
                     g_fGAIndividualInputsFloat[t][p][1] += 360.0;
+                }
 
                 if (g_fGAIndividualInputsFloat[t][p][1] > 180.0)
+                {
                     g_fGAIndividualInputsFloat[t][p][1] -= 360.0;
+                }
             }
             else
             {
@@ -2429,6 +2489,7 @@ void GeneratePopulation(int iStartIndex = 0)
     
     g_bPopulation = true;
     g_iCurrentGen = 0;
+
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
         g_bGAIndividualMeasured[i] = false;
@@ -2437,89 +2498,106 @@ void GeneratePopulation(int iStartIndex = 0)
     PrintToServer("%s Population generated!", g_cPrintPrefixNoColor);
     ServerCommand("host_timescale %f", g_fTimeScale);
 
+    // Start measuring loop
     MeasureFitness(0);
 }
 
+// Summary:
+// Calculate fitness of an individual
 public void CalculateFitness(int individual)
 {
-    float playerPos[3];
-    float cP[3];
-    int lastCP = -1;
+    float fPlayerPos[3];
+    float fClosestPoint[3];
+    int iLastCP = -1;
     
-    GetEntPropVector(g_iBot, Prop_Data, "m_vecAbsOrigin", playerPos);
-    cP = g_fGAStartPos;
+    GetEntPropVector(g_iBot, Prop_Data, "m_vecAbsOrigin", fPlayerPos);
+    fClosestPoint = g_fGAStartPos;
     
+    // Get position individual teleported at
     if(g_fTelePos[0] != 0.0 && g_fTelePos[1] != 0.0 && g_fTelePos[2] != 0.0)
-        playerPos = g_fTelePos;
+    {
+        fPlayerPos = g_fTelePos;
+    }
     
+    // Reset teleport position
     g_fTelePos[0] = 0.0;
     g_fTelePos[1] = 0.0;
-    g_fTelePos[2] = 0.0;
-    
+    g_fTelePos[2] = 0.0;   
 
+    // Loop through checkpoints to find the last checkpoint individual passed
+    // and the closest point on the fitness line
+    for(int i = -1; i < MAX_CHECKPOINTS - 1; i++) 
+    {
+        float fTempPos[3];
 
-    for(int i = -1; i < MAX_CHECKPOINTS - 1; i++) {
-        float temp[3];
-
+        // Check if next checkpoint is valid
         if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
         {
-            float currentToNext[3];
-            float playerToCurrent[3];
+            float fCurrentToNext[3];
+            float fPlayerToCurrent[3];
 
             if(i == -1)
             {
-                // start to first cp
-                ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], playerPos, temp);
-                SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, currentToNext);
-                SubtractVectors(g_fGAStartPos, playerPos, playerToCurrent);
+                // Start position to first checkpoint
+                ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], fPlayerPos, fTempPos);
+                SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, fCurrentToNext);
+                SubtractVectors(g_fGAStartPos, fPlayerPos, fPlayerToCurrent);
             }
             else
             {
-                ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], playerPos, temp);
-                SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], currentToNext);
-                SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
+                // Checkpoint i to i + 1
+                ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], fPlayerPos, fTempPos);
+                SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], fCurrentToNext);
+                SubtractVectors(g_fGACheckPoints[i], fPlayerPos, fPlayerToCurrent);
             }             
 
-            if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
+            // Check if individual has passed checkpoint
+            if (GetVectorDotProduct(fCurrentToNext, fPlayerToCurrent) < 0)
             {
                 // If dot product < 0
-                // player has passed checkpoint i
+                // individual has passed checkpoint i
 
-                if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
+                // Check if new point is closer than previous
+                if(GetVectorDistance(fTempPos, fPlayerPos) < GetVectorDistance(fClosestPoint, fPlayerPos))
                 {
-                    cP = temp;
-                    lastCP = i;
+                    fClosestPoint = fTempPos;
+                    iLastCP = i;
                 }
             }
         }
         else
-        {
-            
+        {          
+            // Checkpoint i + 1 is not valid
 
             if(i == -1)
             {
-                // no cps
-                ClosestPoint(g_fGAEndPos, g_fGAStartPos, playerPos, cP);
+                // No checkpoints,
+                // get closest point from start to end position
+                ClosestPoint(g_fGAEndPos, g_fGAStartPos, fPlayerPos, fClosestPoint);
             }
             else
             {
-                float currentToNext[3];
-                float playerToCurrent[3];
+                // Has checkpoints, i was the last one
 
-                // last cp was i
-                ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, playerPos, temp);
-                SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], currentToNext);
-                SubtractVectors(g_fGACheckPoints[i], playerPos, playerToCurrent);
+                float fCurrentToNext[3];
+                float fPlayerToCurrent[3];
 
-                if (GetVectorDotProduct(currentToNext, playerToCurrent) < 0)
+                // Checkpoint i to end position
+                ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, fPlayerPos, fTempPos);
+                SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], fCurrentToNext);
+                SubtractVectors(g_fGACheckPoints[i], fPlayerPos, fPlayerToCurrent);
+
+                // Check if individual passed checkpoint i
+                if (GetVectorDotProduct(fCurrentToNext, fPlayerToCurrent) < 0)
                 {
                     // If dot product < 0
                     // player has passed checkpoint i
 
-                    if(GetVectorDistance(temp, playerPos) < GetVectorDistance(cP, playerPos))
+                    // Check if new point is closer than previous
+                    if(GetVectorDistance(fTempPos, fPlayerPos) < GetVectorDistance(fClosestPoint, fPlayerPos))
                     {
-                        cP = temp;
-                        lastCP = i;
+                        fClosestPoint = fTempPos;
+                        iLastCP = i;
                     }
                 }
             }
@@ -2528,176 +2606,218 @@ public void CalculateFitness(int individual)
         }
     }
     
-    // Check for walls
-    /*Handle trace = TR_TraceRayFilterEx(playerPos, cP, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint, TraceRayDontHitSelf, g_iBot);
-    if(TR_DidHit(trace))
-       g_fOverrideFitness = -10000000.0;
-   
-    CloseHandle(trace);*/
+    // Get distance along the fitness line to closest point
+    float fDistance;
     
-    //PrintToServer("%s individual %d lastCP: %d", g_cPrintPrefixNoColor, individual, lastCP);
-    
-    float dist;
-    
-    for(int i = 0; i <= lastCP; i++)
+    // Loop through all passed checkpoints
+    for(int i = 0; i <= iLastCP; i++)
     {
         if(i == 0)
         {
-            dist += GetVectorDistance(g_fGAStartPos, g_fGACheckPoints[i]);
+            fDistance += GetVectorDistance(g_fGAStartPos, g_fGACheckPoints[i]);
         }
         else
-            dist += GetVectorDistance(g_fGACheckPoints[i - 1], g_fGACheckPoints[i]);
+        {
+            fDistance += GetVectorDistance(g_fGACheckPoints[i - 1], g_fGACheckPoints[i]);
+        }
     }
     
-    if(lastCP < 0)
-        dist += GetVectorDistance(g_fGAStartPos, cP);
+    // Add distance from last checkpoint or start position
+    // to closest point
+    if(iLastCP < 0)
+    {
+        fDistance += GetVectorDistance(g_fGAStartPos, fClosestPoint);
+    }
     else
-        dist += GetVectorDistance(g_fGACheckPoints[lastCP], cP);
+    {
+        fDistance += GetVectorDistance(g_fGACheckPoints[iLastCP], fClosestPoint);
+    }
         
-    // subtract distance from line
-    dist -= GetVectorDistance(cP, playerPos) * 0.5;
-        
-    g_fGAIndividualFitness[individual] = dist;
+    // Subtract distance away from line
+    fDistance -= GetVectorDistance(fClosestPoint, fPlayerPos) * 0.5;
+    
+    // Set fitness to final distance
+    g_fGAIndividualFitness[individual] = fDistance;
 
+    // Override fitness if set
     if(g_fOverrideFitness != 0.0)
+    {
         g_fGAIndividualFitness[individual] = g_fOverrideFitness;
+    }
 
+    // Reset override
     g_fOverrideFitness = 0.0;
 
+    // Add extra fitness for time saved if individual made it to the end
     if (g_bMadeToEnd)
     {
         g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 10;
     }
 
+    // Reset end status
     g_bMadeToEnd = false;
     g_iLeftOverFrames = 0;
 
-    //PrintToServer("%s Fitness of %d-%d: %f", g_cPrintPrefixNoColor, g_iCurrentGen, individual, g_fGAIndividualFitness[individual]);
-
+    // Draw laser from individual to closest point
     if(g_bDraw)
     {
-        int ent = DrawLaser(playerPos, cP, 255, 0, 0);
+        int ent = DrawLaser(fPlayerPos, fClosestPoint, 255, 0, 0);
         CreateTimer(5.0, Timer_KillEnt, ent);
     }
 }
 
-public bool TraceRayDontHitSelf(int entity, int contentsMask, any data)
-{
-    // Don't return players or player projectiles
-    int entity_owner;
-    entity_owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
-
-    if(entity != data && !(0 < entity <= MaxClients) && !(0 < entity_owner <= MaxClients))
-    {
-        return true;
-    }
-    return false;
-}
-
-
+// Summary:
+// Measure fitness of an individual
 public void MeasureFitness(int index)
 {
     int ent = -1;
+
+    // Kill pipes and rockets
     while ((ent = FindEntityByClassname(ent, "tf_projectile_pipe_remote")) != -1)
     {
         AcceptEntityInput(ent, "Kill");
     }
     
+    // Teleport to start
     TeleportEntity(g_iBot, g_fGAStartPos, g_fGAStartAng, {0.0, 0.0, 0.0});
-    // wait for attack cooldown
+
+    // Wait for attack cooldown
     // should probably manually reset it and impulse 101 instead of waiting
     CreateTimer(1.5, MeasureTimer, index);
+
+    // TODO: Simplify this function.
+    // Killing pipe and rocket entities, as well as
+    // waiting for attack cooldown are not required
+    // in surf maps.
+    // These have been left in from the rocketjumping legacy version.
 }
 
-// https://stackoverflow.com/questions/47481774/getting-point-on-line-segment-that-is-closest-to-another-point/47484153#47484153
+// Summary:
+// Get the closest point on a line from point A to B
+// https://stackoverflow.com/a/47484153
 public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
 {
     float AB[3];
     SubtractVectors(B, A, AB);
+
     float AP[3];
     SubtractVectors(P, A, AP);
+
     float lengthSqrAB = AB[0] * AB[0] + AB[1] * AB[1] + AB[2] * AB[2];
     float t = (AP[0] * AB[0] + AP[1] * AB[1] + AP[2] * AB[2]) / lengthSqrAB;
+
     if(t < 0.0)
+    {
         t = 0.0;
+    }
+
     if(t > 1.0)
+    {
         t = 1.0;
+    }
+
     ScaleVector(AB, t);
     AddVectors(A, AB, ref);
 }
 
+// Summary:
+// Breed a new generation
 public void Breed()
 {
     ServerCommand("host_timescale 1");
 
-    int fittest[POPULATION_SIZE/2];
-    float order[POPULATION_SIZE];
+    // Order fitness values
+    float fOrder[POPULATION_SIZE];
+
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
-        order[i] = g_fGAIndividualFitness[i];
+        fOrder[i] = g_fGAIndividualFitness[i];
     }
 
-    SortFloats(order, POPULATION_SIZE, Sort_Descending);
+    SortFloats(fOrder, POPULATION_SIZE, Sort_Descending);
+
+    // Get the indices of fittest 50% - LUCKY_FEW individuals
+    int iFittest[POPULATION_SIZE/2];
+
     for(int i = 0; i < (POPULATION_SIZE / 2) - LUCKY_FEW; i++)
     {
         for(int j = 0; j < POPULATION_SIZE; j++)
         {
-            if(order[i] == g_fGAIndividualFitness[j])
-                fittest[i] = j;
+            if(fOrder[i] == g_fGAIndividualFitness[j])
+            {
+                iFittest[i] = j;
+            }
         }
     }
     
-    // make lucky few individuals parents even if they're not the fittest
+    // Get the indices of LUCKY_FEW individuals
     for(int i = 0; i < LUCKY_FEW; i++)
     {
-        bool t = true;
-        while(t)
+        bool bDone = false;
+
+        while(!bDone)
         {
-            int r = GetRandomInt(0, POPULATION_SIZE-1);
-            bool tt;
+            // Get random individual from population
+            int iRandom = GetRandomInt(0, POPULATION_SIZE-1);
+
+            bool bAssigned;
+
+            // Check if individual is already in fittest
             for(int j = 0; j < POPULATION_SIZE / 2; j++)
             {
-                if(fittest[j] == r)
+                if(iFittest[j] == iRandom)
                 {
-                    tt = true;
+                    bAssigned = true;
                 }
             }
-            if(!tt)
+
+            // Add to fittest
+            if(!bAssigned)
             {
-                fittest[(POPULATION_SIZE / 2) - LUCKY_FEW + i] = r;
-                t = false;
+                iFittest[(POPULATION_SIZE / 2) - LUCKY_FEW + i] = iRandom;
+                bDone = true;
             }
         }
     }
     
-    // pair parents randomly
-    int parents[POPULATION_SIZE/4][2];
-    bool taken[POPULATION_SIZE/2];
-    int par = 0;
+    // Pair parents randomly
+    int iParents[POPULATION_SIZE/4][2];
+    bool bTaken[POPULATION_SIZE/2];
+    int iParentIndex = 0;
+
     for(int i = 0; i < POPULATION_SIZE / 2; i++)
     {
-        if(!taken[i])
-        {
-            int rand = GetRandomInt(0, (POPULATION_SIZE/2) - 1);
-            while(taken[rand] || rand == i)
-                rand = GetRandomInt(0, (POPULATION_SIZE/2) - 1);
+        if(!bTaken[i])
+        {   
+            // Get random parent
+            int iRandom = GetRandomInt(0, (POPULATION_SIZE/2) - 1);
+
+            // Increment if taken
+            while(bTaken[iRandom] || iRandom == i)
+            {
+                iRandom = GetRandomInt(0, (POPULATION_SIZE/2) - 1);
+            }
             
-            parents[par][0] = fittest[i];
-            parents[par][1] = fittest[rand];
-            taken[i] = true;
-            taken[rand] = true;
-            par++;
+            // Set parents
+            iParents[iParentIndex][0] = iFittest[i];
+            iParents[iParentIndex][1] = iFittest[iRandom];
+
+            // Set taken status
+            bTaken[i] = true;
+            bTaken[iRandom] = true;
+
+            iParentIndex++;
         }
     }
 
-    // init array for new children
+    // Create arrays for new children
     int iChildrenInputsInt[MAX_FRAMES][POPULATION_SIZE/2];
     float fChildrenInputsFloat[MAX_FRAMES][POPULATION_SIZE/2][2];
 
     // loop through parents
-    for(int p = 0; p < POPULATION_SIZE / 4; p++)
+    for(int i = 0; i < POPULATION_SIZE / 4; i++)
     {
-        // two-point crossover
+        // Two-point crossover
         int iSize = g_iFrames - 1;
         int iCxPoint1 = GetRandomInt(1, iSize);
         int iCxPoint2 = GetRandomInt(1, iSize - 1);
@@ -2708,16 +2828,18 @@ public void Breed()
         }
         else
         {
-            // swap
+            // Swap crossover points
             int iTemp = iCxPoint1;
             iCxPoint1 = iCxPoint2;
             iCxPoint2 = iTemp;
         }
 
         // Loop through both parents
-        for (int iParent = 0; iParent < 2; iParent++)
+        for (int iCrossParent = 0; iCrossParent < 2; iCrossParent++)
         {
-            int iChildIndex = p*2 + iParent;
+            // A pair of parents will create 2 children,
+            // determine child index
+            int iChildIndex = i*2 + iCrossParent;
 
             // Loop through frames
             for(int t = 0; t < g_iFrames; t++)
@@ -2725,47 +2847,47 @@ public void Breed()
                 // Get genes from other parent if frame is between crossover points
                 if(t >= iCxPoint1 && t <= iCxPoint2)
                 {
-                    iParent = iParent == 0 ? 1 : 0;
+                    iCrossParent = iCrossParent == 0 ? 1 : 0;
                 }
 
                 // Get buttons from parent
-                for(int a = 0; a < 5; a++)
+                for(int j = 0; j < 5; j++)
                 {
                     // Check if parent has button
-                    if(g_iGAIndividualInputsInt[t][parents[p][iParent]] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
+                    if(g_iGAIndividualInputsInt[t][iParents[i][iCrossParent]] & g_iPossibleButtons[j] == g_iPossibleButtons[j])
                     {
-                        // parent has button, add to child
-                        iChildrenInputsInt[t][iChildIndex] |= g_iPossibleButtons[a];
+                        // Parent has button, add to child
+                        iChildrenInputsInt[t][iChildIndex] |= g_iPossibleButtons[j];
                     }
                     else
                     {
-                        // parent does not have button, remove from child
-                        iChildrenInputsInt[t][iChildIndex] &= ~g_iPossibleButtons[a];
+                        // Parent does not have button, remove from child
+                        iChildrenInputsInt[t][iChildIndex] &= ~g_iPossibleButtons[j];
                     }
 
-                    // random mutations
+                    // Random mutations
                     if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
                     {
-                        if(iChildrenInputsInt[t][iChildIndex] & g_iPossibleButtons[a] == g_iPossibleButtons[a])
+                        if(iChildrenInputsInt[t][iChildIndex] & g_iPossibleButtons[j] == g_iPossibleButtons[j])
                         {
-                            // has button, remove
-                            iChildrenInputsInt[t][iChildIndex] &= ~g_iPossibleButtons[a];
+                            // Has button, remove
+                            iChildrenInputsInt[t][iChildIndex] &= ~g_iPossibleButtons[j];
                         }
                         else
                         {                            
-                            // doesn't have button, add
-                            iChildrenInputsInt[t][iChildIndex] |= g_iPossibleButtons[a];
+                            // Doesn't have button, add
+                            iChildrenInputsInt[t][iChildIndex] |= g_iPossibleButtons[j];
                         }
                     }
                 }
 
-                // Get angles from parents
-                for(int a = 0; a < 2; a++)
+                // Get angles from parent
+                for(int j = 0; j < 2; j++)
                 {
-                    fChildrenInputsFloat[t][iChildIndex][a] = g_fGAIndividualInputsFloat[t][parents[p][iParent]][a];
+                    fChildrenInputsFloat[t][iChildIndex][j] = g_fGAIndividualInputsFloat[t][iParents[i][iCrossParent]][j];
                 }
 
-                // random mutations
+                // Random mutations
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
                     float val = GetRandomFloat(-0.1, 0.1);
@@ -2776,10 +2898,14 @@ public void Breed()
                         fChildrenInputsFloat[j][iChildIndex][0] += val;
 
                         if (fChildrenInputsFloat[j][iChildIndex][0] < -89.0)
+                        {
                             fChildrenInputsFloat[j][iChildIndex][0] = -89.0;
+                        }
 
                         if (fChildrenInputsFloat[j][iChildIndex][0] > 89.0)
+                        {
                             fChildrenInputsFloat[j][iChildIndex][0] = 89.0;
+                        }
                     }
 
                 }
@@ -2793,35 +2919,42 @@ public void Breed()
                         fChildrenInputsFloat[j][iChildIndex][1] += val;
 
                         if (fChildrenInputsFloat[j][iChildIndex][1] < -180.0)
+                        {
                             fChildrenInputsFloat[j][iChildIndex][1] += 360.0;
+                        }
 
                         if (fChildrenInputsFloat[j][iChildIndex][1] > 180.0)
+                        {
                             fChildrenInputsFloat[j][iChildIndex][1] -= 360.0;
+                        }
                     }
                 }
             }
         }
     }
 
-    // overwrite least fittest with new children
+    // Overwrite least fittest with new children
     int iLastUsedChild = 0;
+
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
         // Check if individual is a parent
         bool bParent = false;
+
         for(int j = 0; j < POPULATION_SIZE / 4; j++)
         {
-            if (parents[j][0] == i || parents[j][1] == i)
+            if (iParents[j][0] == i || iParents[j][1] == i)
             {
                 bParent = true;
             }
         }
+
         if(bParent)
         {
             continue;
         }
         
-        // overwrite frames
+        // Overwrite frames
         for (int j = 0; j < g_iFrames; j++)
         {
             g_iGAIndividualInputsInt[j][i] = iChildrenInputsInt[j][iLastUsedChild];
@@ -2832,6 +2965,7 @@ public void Breed()
         g_bGAIndividualMeasured[i] = false;
 
         iLastUsedChild++;
+
         if (iLastUsedChild >= (POPULATION_SIZE/2) - 1)
         {
             break;
@@ -2839,15 +2973,24 @@ public void Breed()
     }
 
     g_iCurrentGen++;
+
     PrintToServer("%s Generation %d breeded!", g_cPrintPrefixNoColor, g_iCurrentGen);
-    ServerCommand("host_timescale %f", g_fTimeScale);    
+
+    ServerCommand("host_timescale %f", g_fTimeScale);  
+
     MeasureFitness(0);      
 }
 
+// Summary:
+// Stop playback of a player recording
 public void StopPlayback()
 {
     g_bPlayback = false;
+
     if(g_hFile != null)
+    {
         g_hFile.Close();
+    }
+
     CPrintToChatAll("%s Playback stopped!", g_cPrintPrefix);
 }
