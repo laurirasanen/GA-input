@@ -106,7 +106,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "Larry",
     description = "Genetic algorithm for surf",
-    version = "1.0.0",
+    version = "1.0.1",
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
@@ -341,13 +341,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 return Plugin_Continue;
             }
             
+            // Get bot's position
+            float fPos[3];
+            GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
+
             // Not the first frame
             if(g_iSimCurrentFrame != 0)
             {
-                // Get bot's position
-                float fPos[3];
-                GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fPos);
-
                 // Check if bot gets teleported
                 if(GetVectorDistance(g_fLastPos, fPos) > 91.0)
                 {
@@ -469,10 +469,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     
                     return Plugin_Continue;
                 }
-
-                // Save last position
-                g_fLastPos = fPos;
             }
+
+            // Save last position
+            g_fLastPos = fPos;
             
             // Get buttons for current frame
             buttons = g_iGAIndividualInputsInt[g_iSimCurrentFrame][g_iSimIndex];
@@ -2237,7 +2237,7 @@ public void Pad(int individual, int startFrame)
         // Random mouse movement
         if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
         {
-            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-1.0, 1.0);
+            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-0.1, 0.1);
 
             if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
             {
@@ -2250,7 +2250,7 @@ public void Pad(int individual, int startFrame)
             }
 
 
-            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
+            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-0.1, 0.1);
 
             if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
             {
@@ -2481,7 +2481,7 @@ void GeneratePopulation(int iStartIndex = 0)
                 }
 
 
-                g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-1.0, 1.0);
+                g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-0.1, 0.1);
 
                 if (g_fGAIndividualInputsFloat[t][p][1] < -180.0)
                 {
