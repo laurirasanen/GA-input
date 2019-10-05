@@ -2515,74 +2515,57 @@ public void CalculateFitness(int individual)
     g_fTelePos[1] = 0.0;
     g_fTelePos[2] = 0.0;   
 
-    // Loop through checkpoints to find the last checkpoint individual passed
-    // and the closest point on the fitness line
-    for(int i = -1; i < MAX_CHECKPOINTS - 1; i++) 
+    if (g_bMadeToEnd)
     {
-        float fTempPos[3];
+        fClosestPoint = g_fGAEndPos;
 
-        // Check if next checkpoint is valid
-        if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
+        for(int i = 0; i < MAX_CHECKPOINTS; i++) 
         {
-            float fCurrentToNext[3];
-            float fPlayerToCurrent[3];
-
-            if(i == -1)
+            // Check if checkpoint is valid
+            if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
             {
-                // Start position to first checkpoint
-                ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], fPlayerPos, fTempPos);
-                SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, fCurrentToNext);
-                SubtractVectors(g_fGAStartPos, fPlayerPos, fPlayerToCurrent);
+                iLastCP = i;
             }
             else
             {
-                // Checkpoint i to i + 1
-                ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], fPlayerPos, fTempPos);
-                SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], fCurrentToNext);
-                SubtractVectors(g_fGACheckPoints[i], fPlayerPos, fPlayerToCurrent);
-            }             
-
-            // Check if individual has passed checkpoint
-            if (GetVectorDotProduct(fCurrentToNext, fPlayerToCurrent) < 0)
-            {
-                // If dot product < 0
-                // individual has passed checkpoint i
-
-                // Check if new point is closer than previous
-                if(GetVectorDistance(fTempPos, fPlayerPos) < GetVectorDistance(fClosestPoint, fPlayerPos))
-                {
-                    fClosestPoint = fTempPos;
-                    iLastCP = i;
-                }
+                break;
             }
         }
-        else
-        {          
-            // Checkpoint i + 1 is not valid
+    }
+    else
+    {
+        // Loop through checkpoints to find the last checkpoint individual passed
+        // and the closest point on the fitness line
+        for(int i = -1; i < MAX_CHECKPOINTS - 1; i++) 
+        {
+            float fTempPos[3];
 
-            if(i == -1)
+            // Check if next checkpoint is valid
+            if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
             {
-                // No checkpoints,
-                // get closest point from start to end position
-                ClosestPoint(g_fGAEndPos, g_fGAStartPos, fPlayerPos, fClosestPoint);
-            }
-            else
-            {
-                // Has checkpoints, i was the last one
-
                 float fCurrentToNext[3];
                 float fPlayerToCurrent[3];
 
-                // Checkpoint i to end position
-                ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, fPlayerPos, fTempPos);
-                SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], fCurrentToNext);
-                SubtractVectors(g_fGACheckPoints[i], fPlayerPos, fPlayerToCurrent);
+                if(i == -1)
+                {
+                    // Start position to first checkpoint
+                    ClosestPoint(g_fGAStartPos, g_fGACheckPoints[i + 1], fPlayerPos, fTempPos);
+                    SubtractVectors(g_fGACheckPoints[i + 1], g_fGAStartPos, fCurrentToNext);
+                    SubtractVectors(g_fGAStartPos, fPlayerPos, fPlayerToCurrent);
+                }
+                else
+                {
+                    // Checkpoint i to i + 1
+                    ClosestPoint(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], fPlayerPos, fTempPos);
+                    SubtractVectors(g_fGACheckPoints[i + 1], g_fGACheckPoints[i], fCurrentToNext);
+                    SubtractVectors(g_fGACheckPoints[i], fPlayerPos, fPlayerToCurrent);
+                }             
 
-                // Check if individual passed checkpoint i
+                // Check if individual has passed checkpoint
                 if (GetVectorDotProduct(fCurrentToNext, fPlayerToCurrent) < 0)
                 {
                     // If dot product < 0
-                    // player has passed checkpoint i
+                    // individual has passed checkpoint i
 
                     // Check if new point is closer than previous
                     if(GetVectorDistance(fTempPos, fPlayerPos) < GetVectorDistance(fClosestPoint, fPlayerPos))
@@ -2592,8 +2575,45 @@ public void CalculateFitness(int individual)
                     }
                 }
             }
+            else
+            {          
+                // Checkpoint i + 1 is not valid
 
-            break;
+                if(i == -1)
+                {
+                    // No checkpoints,
+                    // get closest point from start to end position
+                    ClosestPoint(g_fGAEndPos, g_fGAStartPos, fPlayerPos, fClosestPoint);
+                }
+                else
+                {
+                    // Has checkpoints, i was the last one
+
+                    float fCurrentToNext[3];
+                    float fPlayerToCurrent[3];
+
+                    // Checkpoint i to end position
+                    ClosestPoint(g_fGACheckPoints[i], g_fGAEndPos, fPlayerPos, fTempPos);
+                    SubtractVectors(g_fGAEndPos, g_fGACheckPoints[i], fCurrentToNext);
+                    SubtractVectors(g_fGACheckPoints[i], fPlayerPos, fPlayerToCurrent);
+
+                    // Check if individual passed checkpoint i
+                    if (GetVectorDotProduct(fCurrentToNext, fPlayerToCurrent) < 0)
+                    {
+                        // If dot product < 0
+                        // player has passed checkpoint i
+
+                        // Check if new point is closer than previous
+                        if(GetVectorDistance(fTempPos, fPlayerPos) < GetVectorDistance(fClosestPoint, fPlayerPos))
+                        {
+                            fClosestPoint = fTempPos;
+                            iLastCP = i;
+                        }
+                    }
+                }
+
+                break;
+            }
         }
     }
     
@@ -2642,7 +2662,7 @@ public void CalculateFitness(int individual)
     // Add extra fitness for time saved if individual made it to the end
     if (g_bMadeToEnd)
     {
-        g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 10;
+        g_fGAIndividualFitness[individual] += g_iLeftOverFrames;
     }
 
     // Reset end status
