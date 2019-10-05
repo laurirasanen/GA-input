@@ -108,7 +108,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "Larry",
     description = "Genetic algorithm for surf",
-    version = "1.0.2",
+    version = "1.0.3",
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
@@ -511,9 +511,44 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             // Reset buttons to prevent jumping and ducking for now..
             buttons = 0;
 
-            // Get angles for current frame
-            angles[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][0];
-            angles[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][1];
+            // Get delta angles for current frame
+            float eyeAngles[3];
+            
+            if (g_iSimCurrentFrame == 0)
+            {
+                // Teleporting to start does not set eye angles it seems
+                eyeAngles = g_fGAStartAng;
+            }
+            else
+            {
+                GetClientEyeAngles(client, eyeAngles);
+            }
+
+            eyeAngles[0] += g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][0];
+            eyeAngles[1] += g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][1];
+
+            // clamp pitch
+            if (eyeAngles[0] < -89.0)
+            {
+                eyeAngles[0] = -89.0;
+            }
+            else if (eyeAngles[0] > 89.0)
+            {
+                eyeAngles[0] = 89.0;
+            }
+
+            // yaw wrap around
+            if (eyeAngles[1] < -180.0)
+            {
+                eyeAngles[1] += 360.0;
+            }
+            else if (eyeAngles[1] > 180.0)
+            {
+                eyeAngles[1] -= 360.0;
+            }
+
+            angles[0] = eyeAngles[0];
+            angles[1] = eyeAngles[1];
             angles[2] = 0.0;
 
             // Increment frame
@@ -2213,50 +2248,16 @@ public void Pad(int individual, int startFrame)
             }
         }
 
-        g_fGAIndividualInputsFloat[t][individual][0] = g_fGAStartAng[0];
-        g_fGAIndividualInputsFloat[t][individual][1] = g_fGAStartAng[1];
-
-        float prevPitch = g_fGAStartAng[0];
-        float prevYaw = g_fGAStartAng[1];
-
-        if (t > 0)
-        {
-            prevPitch = g_fGAIndividualInputsFloat[t - 1][individual][0];
-            prevYaw = g_fGAIndividualInputsFloat[t - 1][individual][1];
-        }
-
         // Random mouse movement
         if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
         {
-            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
-
-            if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
-            {
-                g_fGAIndividualInputsFloat[t][individual][0] = -89.0;
-            }
-
-            if (g_fGAIndividualInputsFloat[t][individual][0] > 89.0)
-            {
-                g_fGAIndividualInputsFloat[t][individual][0] = 89.0;
-            }
-
-
-            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
-
-            if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
-            {
-                g_fGAIndividualInputsFloat[t][individual][1] += 360.0;
-            }
-
-            if (g_fGAIndividualInputsFloat[t][individual][1] > 180.0)
-            {
-                g_fGAIndividualInputsFloat[t][individual][1] -= 360.0;
-            }
+            g_fGAIndividualInputsFloat[t][individual][0] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
+            g_fGAIndividualInputsFloat[t][individual][1] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
         }
         else
         {
-            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch;
-            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw;
+            g_fGAIndividualInputsFloat[t][individual][0] = 0.0;
+            g_fGAIndividualInputsFloat[t][individual][1] = 0.0;
         }
     }   
 }
@@ -2409,10 +2410,6 @@ void GeneratePopulation(int iStartIndex = 0)
     // Loop through individuals
     for(int p = iStartIndex; p < POPULATION_SIZE; p++)
     {
-        // Set initial rotation to start angle
-        g_fGAIndividualInputsFloat[0][p][0] = g_fGAStartAng[0];
-        g_fGAIndividualInputsFloat[0][p][1] = g_fGAStartAng[1];
-
         for(int t = 0; t < g_iFrames/INPUT_INTERVAL; t++)
         {
             for(int i = 0; i < 5; i++)
@@ -2432,48 +2429,17 @@ void GeneratePopulation(int iStartIndex = 0)
                     }
                 }
             }
-            
-            float prevPitch = g_fGAStartAng[0];
-            float prevYaw = g_fGAStartAng[1];
-
-            if (t > 0)
-            {
-                prevPitch = g_fGAIndividualInputsFloat[t - 1][p][0];
-                prevYaw = g_fGAIndividualInputsFloat[t - 1][p][1];
-            }
 
             // Random mouse movement
             if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
             {
-                g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
-
-                if (g_fGAIndividualInputsFloat[t][p][0] < -89.0)
-                {
-                    g_fGAIndividualInputsFloat[t][p][0] = -89.0;
-                }
-
-                if (g_fGAIndividualInputsFloat[t][p][0] > 89.0)
-                {
-                    g_fGAIndividualInputsFloat[t][p][0] = 89.0;
-                }
-
-
-                g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
-
-                if (g_fGAIndividualInputsFloat[t][p][1] < -180.0)
-                {
-                    g_fGAIndividualInputsFloat[t][p][1] += 360.0;
-                }
-
-                if (g_fGAIndividualInputsFloat[t][p][1] > 180.0)
-                {
-                    g_fGAIndividualInputsFloat[t][p][1] -= 360.0;
-                }
+                g_fGAIndividualInputsFloat[t][p][0] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
+                g_fGAIndividualInputsFloat[t][p][1] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
             }
             else
             {
-                g_fGAIndividualInputsFloat[t][p][0] = prevPitch;
-                g_fGAIndividualInputsFloat[t][p][1] = prevYaw;
+                g_fGAIndividualInputsFloat[t][p][0] = 0.0;
+                g_fGAIndividualInputsFloat[t][p][1] = 0.0;
             }
         }
     }
@@ -2877,52 +2843,17 @@ public void Breed()
                     }
                 }
 
-                // Get angles from parent
                 for(int j = 0; j < 2; j++)
                 {
-                    fChildrenInputsFloat[t][iChildIndex][j] = g_fGAIndividualInputsFloat[t][iParents[i][iCrossParent]][j];
-                }
-
-                // Random mutations
-                if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
-                {
-                    float val = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
-
-                    // Change all future ticks rotation as well
-                    for(int j = t; j < g_iFrames/INPUT_INTERVAL; j++)
+                    if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                     {
-                        fChildrenInputsFloat[j][iChildIndex][0] += val;
-
-                        if (fChildrenInputsFloat[j][iChildIndex][0] < -89.0)
-                        {
-                            fChildrenInputsFloat[j][iChildIndex][0] = -89.0;
-                        }
-
-                        if (fChildrenInputsFloat[j][iChildIndex][0] > 89.0)
-                        {
-                            fChildrenInputsFloat[j][iChildIndex][0] = 89.0;
-                        }
+                        // Random mutations
+                        fChildrenInputsFloat[t][iChildIndex][j] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
                     }
-
-                }
-                if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
-                {
-                    float val = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
-
-                    // Change all future ticks rotation as well
-                    for(int j = t; j < g_iFrames/INPUT_INTERVAL; j++)
+                    else
                     {
-                        fChildrenInputsFloat[j][iChildIndex][1] += val;
-
-                        if (fChildrenInputsFloat[j][iChildIndex][1] < -180.0)
-                        {
-                            fChildrenInputsFloat[j][iChildIndex][1] += 360.0;
-                        }
-
-                        if (fChildrenInputsFloat[j][iChildIndex][1] > 180.0)
-                        {
-                            fChildrenInputsFloat[j][iChildIndex][1] -= 360.0;
-                        }
+                        // Get angles from parent
+                        fChildrenInputsFloat[t][iChildIndex][j] = g_fGAIndividualInputsFloat[t][iParents[i][iCrossParent]][j];
                     }
                 }
             }
