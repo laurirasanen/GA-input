@@ -51,6 +51,8 @@
 #define MAX_FRAMES 1000         // Max length of an individual, about 15 seconds (assuming 66.6 ticks/s)
 #define POPULATION_SIZE 2000
 #define LUCKY_FEW 200           // Individuals not part of the fittest chosen to be parents
+#define INPUT_INTERVAL 20       // How many ticks to repeat inputs, MAX_FRAMES must be evenly divisible by this
+#define ANGLE_DELTA 2.5         // The maximum view angle change in a tick
 
 // ****************************************************************
 // Global variables
@@ -71,13 +73,13 @@ int g_iSimIndex;                                // Individual index being simula
 int g_iSimCurrentFrame;                         // Current frame of simulation
 int g_iTargetGen;                               // Target generation to generate until
 int g_iCurrentGen;                              // Current generation index
-int g_iGAIndividualInputsInt[MAX_FRAMES][POPULATION_SIZE];  // Button inputs of individuals
+int g_iGAIndividualInputsInt[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE];  // Button inputs of individuals
 int g_iFrames;                                  // Frame cutoff (chromosome length)
 int g_iRecordingClient = -1;                    // Recording client index
 int g_iLeftOverFrames = 0;                      // Time saved by individual when reaching end
 
 float g_fTimeScale = 1000.0;                    // Timescale used for simulating
-float g_fGAIndividualInputsFloat[MAX_FRAMES][POPULATION_SIZE][2];   // Angle inputs of individuals
+float g_fGAIndividualInputsFloat[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE][2];   // Angle inputs of individuals
 float g_fGAIndividualFitness[POPULATION_SIZE];  // Fitness of individuals
 float g_fGAStartPos[3];                         // Starting position
 float g_fGAStartAng[3];                         // Starting angle
@@ -88,7 +90,7 @@ float g_fOverrideFitness;                       // Override to use for individua
 float g_fLastPos[3];                            // Position of individual during last tick
 float g_fMutationChance = 0.05;                 // Button mutation chance
 float g_fRotationMutationChance = 0.05;         // Angles mutation chance
-float g_fEndCutoff = 400.0;                     // Distance from end position to end simulation
+float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
 
 File g_hFile;                                   // File handle
 
@@ -106,7 +108,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "Larry",
     description = "Genetic algorithm for surf",
-    version = "1.0.1",
+    version = "1.0.2",
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
@@ -475,7 +477,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             g_fLastPos = fPos;
             
             // Get buttons for current frame
-            buttons = g_iGAIndividualInputsInt[g_iSimCurrentFrame][g_iSimIndex];
+            buttons = g_iGAIndividualInputsInt[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex];
             
             // Add impulse 101 to refill health and ammo
             impulse |= 101;
@@ -510,8 +512,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             buttons = 0;
 
             // Get angles for current frame
-            angles[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][0];
-            angles[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame][g_iSimIndex][1];
+            angles[0] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][0];
+            angles[1] = g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][1];
             angles[2] = 0.0;
 
             // Increment frame
@@ -987,7 +989,9 @@ public Action CmdSaveGen(int client, int args)
         // Loop through all frames and write to file
         for(int j = 0; j < g_iFrames; j++)
         {
-            g_hFile.WriteLine("%d,%.16f,%.16f", g_iGAIndividualInputsInt[j][i], g_fGAIndividualInputsFloat[j][i][0], g_fGAIndividualInputsFloat[j][i][1]);
+            // Write all frames for compatibility with other INPUT_INTERVAL values
+            int f = j / INPUT_INTERVAL;
+            g_hFile.WriteLine("%d,%.16f,%.16f", g_iGAIndividualInputsInt[f][i], g_fGAIndividualInputsFloat[f][i][0], g_fGAIndividualInputsFloat[f][i][1]);
         }
         
         g_hFile.Close();    
@@ -1095,9 +1099,9 @@ public Action CmdLoadGen(int client, int args)
             if(n == 3)
             {
                 // Parse buttons and angles
-                g_iGAIndividualInputsInt[f][i] = StringToInt(bu[0]);
-                g_fGAIndividualInputsFloat[f][i][0] = StringToFloat(bu[1]);
-                g_fGAIndividualInputsFloat[f][i][1] = StringToFloat(bu[2]);
+                g_iGAIndividualInputsInt[f/INPUT_INTERVAL][i] = StringToInt(bu[0]);
+                g_fGAIndividualInputsFloat[f/INPUT_INTERVAL][i][0] = StringToFloat(bu[1]);
+                g_fGAIndividualInputsFloat[f/INPUT_INTERVAL][i][1] = StringToFloat(bu[2]);
             }
             else
             {
@@ -1334,7 +1338,7 @@ public Action CmdLoadGenFromRec(int client, int args)
     // Pad other runs to match the longest one
     for(int i = 0; i < iLastLoaded; i++)
     {
-        if(iFrameCounts[i] < g_iFrames)
+        if(iFrameCounts[i] < g_iFrames/INPUT_INTERVAL)
         {
             Pad(i, iFrameCounts[i]);
         }
@@ -2189,7 +2193,7 @@ public void Pad(int individual, int startFrame)
 {
     PrintToServer("%s Padding %d by %d frames", g_cPrintPrefixNoColor, individual, g_iFrames - startFrame);
     
-    for(int t = startFrame; t < g_iFrames; t++)
+    for(int t = startFrame; t < g_iFrames/INPUT_INTERVAL; t++)
     {
         for(int i = 0; i < sizeof(g_iPossibleButtons); i++)
         {
@@ -2207,21 +2211,8 @@ public void Pad(int individual, int startFrame)
                     g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
                 }
             }
-                
-            // Chance for inputs to be duplicated from previous tick
-            if(t != 0)
-            {
-                // Check if previous frame has button
-                if(g_iGAIndividualInputsInt[t-1][individual] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
-                {
-                    if(GetRandomFloat(0.0, 1.0) < 0.9)
-                    {
-                        // Add to this frame
-                        g_iGAIndividualInputsInt[t][individual] |= g_iPossibleButtons[i];
-                    }                            
-                }
-            }
         }
+
         g_fGAIndividualInputsFloat[t][individual][0] = g_fGAStartAng[0];
         g_fGAIndividualInputsFloat[t][individual][1] = g_fGAStartAng[1];
 
@@ -2237,7 +2228,7 @@ public void Pad(int individual, int startFrame)
         // Random mouse movement
         if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
         {
-            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-0.1, 0.1);
+            g_fGAIndividualInputsFloat[t][individual][0] = prevPitch + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
 
             if (g_fGAIndividualInputsFloat[t][individual][0] < -89.0)
             {
@@ -2250,7 +2241,7 @@ public void Pad(int individual, int startFrame)
             }
 
 
-            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-0.1, 0.1);
+            g_fGAIndividualInputsFloat[t][individual][1] = prevYaw + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
 
             if (g_fGAIndividualInputsFloat[t][individual][1] < -180.0)
             {
@@ -2422,7 +2413,7 @@ void GeneratePopulation(int iStartIndex = 0)
         g_fGAIndividualInputsFloat[0][p][0] = g_fGAStartAng[0];
         g_fGAIndividualInputsFloat[0][p][1] = g_fGAStartAng[1];
 
-        for(int t = 0; t < g_iFrames; t++)
+        for(int t = 0; t < g_iFrames/INPUT_INTERVAL; t++)
         {
             for(int i = 0; i < 5; i++)
             {
@@ -2440,20 +2431,6 @@ void GeneratePopulation(int iStartIndex = 0)
                         g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
                     }
                 }
-                    
-                // Chance for inputs to be duplicated from previous tick
-                if(t != 0)
-                {
-                    if(g_iGAIndividualInputsInt[t-1][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
-                    {
-                        // Previous tick has button
-                        if(GetRandomFloat(0.0, 1.0) < 0.5)
-                        {
-                            // Add to this
-                            g_iGAIndividualInputsInt[t][p] |= g_iPossibleButtons[i];
-                        }                            
-                    }
-                }
             }
             
             float prevPitch = g_fGAStartAng[0];
@@ -2468,7 +2445,7 @@ void GeneratePopulation(int iStartIndex = 0)
             // Random mouse movement
             if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
             {
-                g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-0.1, 0.1);
+                g_fGAIndividualInputsFloat[t][p][0] = prevPitch + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
 
                 if (g_fGAIndividualInputsFloat[t][p][0] < -89.0)
                 {
@@ -2481,7 +2458,7 @@ void GeneratePopulation(int iStartIndex = 0)
                 }
 
 
-                g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-0.1, 0.1);
+                g_fGAIndividualInputsFloat[t][p][1] = prevYaw + GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
 
                 if (g_fGAIndividualInputsFloat[t][p][1] < -180.0)
                 {
@@ -2684,26 +2661,11 @@ public void CalculateFitness(int individual)
 // Measure fitness of an individual
 public void MeasureFitness(int index)
 {
-    int ent = -1;
-
-    // Kill pipes and rockets
-    while ((ent = FindEntityByClassname(ent, "tf_projectile_pipe_remote")) != -1)
-    {
-        AcceptEntityInput(ent, "Kill");
-    }
-    
     // Teleport to start
     TeleportEntity(g_iBot, g_fGAStartPos, g_fGAStartAng, view_as<float>({ 0.0, 0.0, 0.0 }));
 
-    // Wait for attack cooldown
-    // should probably manually reset it and impulse 101 instead of waiting
-    CreateTimer(1.5, MeasureTimer, index);
-
-    // TODO: Simplify this function.
-    // Killing pipe and rocket entities, as well as
-    // waiting for attack cooldown are not required
-    // in surf maps.
-    // These have been left in from the rocketjumping legacy version.
+    // Wait a second in case start position is in the air
+    CreateTimer(1.0, MeasureTimer, index);
 }
 
 // Summary:
@@ -2825,14 +2787,14 @@ public void Breed()
     }
 
     // Create arrays for new children
-    int iChildrenInputsInt[MAX_FRAMES][POPULATION_SIZE/2];
-    float fChildrenInputsFloat[MAX_FRAMES][POPULATION_SIZE/2][2];
+    int iChildrenInputsInt[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE/2];
+    float fChildrenInputsFloat[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE/2][2];
 
     // loop through parents
     for(int i = 0; i < POPULATION_SIZE / 4; i++)
     {
         // Two-point crossover
-        int iSize = g_iFrames - 1;
+        int iSize = (g_iFrames/INPUT_INTERVAL) - 1;
         int iCxPoint1 = GetRandomInt(1, iSize);
         int iCxPoint2 = GetRandomInt(1, iSize - 1);
 
@@ -2856,7 +2818,7 @@ public void Breed()
             int iChildIndex = i*2 + iCrossParent;
 
             // Loop through frames
-            for(int t = 0; t < g_iFrames; t++)
+            for(int t = 0; t < g_iFrames/INPUT_INTERVAL; t++)
             {            
                 // Get genes from other parent if frame is between crossover points
                 if(t >= iCxPoint1 && t <= iCxPoint2)
@@ -2904,10 +2866,10 @@ public void Breed()
                 // Random mutations
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
-                    float val = GetRandomFloat(-0.1, 0.1);
+                    float val = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
 
                     // Change all future ticks rotation as well
-                    for(int j = t; j < g_iFrames; j++)
+                    for(int j = t; j < g_iFrames/INPUT_INTERVAL; j++)
                     {
                         fChildrenInputsFloat[j][iChildIndex][0] += val;
 
@@ -2925,10 +2887,10 @@ public void Breed()
                 }
                 if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
                 {
-                    float val = GetRandomFloat(-0.1, 0.1);
+                    float val = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
 
                     // Change all future ticks rotation as well
-                    for(int j = t; j < g_iFrames; j++)
+                    for(int j = t; j < g_iFrames/INPUT_INTERVAL; j++)
                     {
                         fChildrenInputsFloat[j][iChildIndex][1] += val;
 
@@ -2969,7 +2931,7 @@ public void Breed()
         }
         
         // Overwrite frames
-        for (int j = 0; j < g_iFrames; j++)
+        for (int j = 0; j < g_iFrames/INPUT_INTERVAL; j++)
         {
             g_iGAIndividualInputsInt[j][i] = iChildrenInputsInt[j][iLastUsedChild];
             g_fGAIndividualInputsFloat[j][i][0] = fChildrenInputsFloat[j][iLastUsedChild][0];
