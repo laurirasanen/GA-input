@@ -53,6 +53,7 @@
 #define LUCKY_FEW 200           // Individuals not part of the fittest chosen to be parents
 #define INPUT_INTERVAL 20       // How many ticks to repeat inputs, MAX_FRAMES must be evenly divisible by this
 #define ANGLE_DELTA 2.5         // The maximum view angle change in a tick
+#define MAX_PITCH 30.0          // How far up or down the view can be pitched
 
 // ****************************************************************
 // Global variables
@@ -108,7 +109,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "Larry",
     description = "Genetic algorithm for surf",
-    version = "1.0.3",
+    version = "1.0.4",
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
@@ -528,13 +529,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             eyeAngles[1] += g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][1];
 
             // clamp pitch
-            if (eyeAngles[0] < -89.0)
+            if (eyeAngles[0] < -MAX_PITCH)
             {
-                eyeAngles[0] = -89.0;
+                eyeAngles[0] = -MAX_PITCH;
             }
-            else if (eyeAngles[0] > 89.0)
+            else if (eyeAngles[0] > MAX_PITCH)
             {
-                eyeAngles[0] = 89.0;
+                eyeAngles[0] = MAX_PITCH;
             }
 
             // yaw wrap around
