@@ -89,8 +89,8 @@ float g_fGACheckPoints[MAX_CHECKPOINTS][3];     // Checkpoints of fitness line
 float g_fTelePos[3] = { 0.0, 0.0, 0.0 };        // Position where individual teleported
 float g_fOverrideFitness;                       // Override to use for individual fitness
 float g_fLastPos[3];                            // Position of individual during last tick
-float g_fMutationChance = 0.05;                 // Button mutation chance
-float g_fRotationMutationChance = 0.05;         // Angles mutation chance
+float g_fMutationChance = 0.01;                 // Button mutation chance
+float g_fRotationMutationChance = 0.03;         // Angles mutation chance
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
 
 File g_hFile;                                   // File handle
@@ -109,7 +109,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "Larry",
     description = "Genetic algorithm for surf",
-    version = "1.0.4",
+    version = "1.0.5",
     url = "http://steamcommunity.com/id/pancakelarry"
 };
 
@@ -2068,6 +2068,12 @@ public Action CmdClear(int client, int args)
     g_bPopulation = false;
     g_iTargetGen = 0;
     g_iCurrentGen = 0;
+
+    for(int i = 0; i < POPULATION_SIZE; i++)
+    {
+        g_fGAIndividualFitness[i] = 0.0;
+        g_bGAIndividualMeasured[i] = false;
+    }
 
     if(client == 0)
     {
