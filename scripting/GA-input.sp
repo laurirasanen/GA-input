@@ -92,6 +92,7 @@ float g_fLastPos[3];                            // Position of individual during
 float g_fMutationChance = 0.01;                 // Button mutation chance
 float g_fRotationMutationChance = 0.03;         // Angles mutation chance
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
+float g_fVerticalFitnessScale = 2.0;            // Used for subtracting points if below the closest point on fitness line
 
 File g_hFile;                                   // File handle
 
@@ -107,10 +108,10 @@ char g_cLastRecord[64];                             // Name of last player recor
 public Plugin myinfo =
 {
     name = "GA-input",
-    author = "Larry",
+    author = "laurirasanen",
     description = "Genetic algorithm for surf",
-    version = "1.0.5",
-    url = "http://steamcommunity.com/id/pancakelarry"
+    version = "1.0.6",
+    url = "https://github.com/laurirasanen"
 };
 
 // ****************************************************************
@@ -363,6 +364,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     // Set last position of bot before teleporting
                     // for fitness calculation
                     g_fTelePos = g_fLastPos;
+                    // Set amount of frames saved from cutoff limit
+                    g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
                     CalculateFitness(g_iSimIndex);
 
                     // Return if playing back instead of measuring
@@ -1806,7 +1809,7 @@ public Action CmdSetFrames(int client, int args)
 
     if(client == 0)
     {
-        PrintToServer("%s Frames set to %f", g_cPrintPrefixNoColor, g_iFrames);
+        PrintToServer("%s Frames set to %d", g_cPrintPrefixNoColor, g_iFrames);
     }
     else
     {
@@ -2618,7 +2621,17 @@ public void CalculateFitness(int individual)
     }
         
     // Subtract distance away from line
-    fDistance -= GetVectorDistance(fClosestPoint, fPlayerPos) * 0.5;
+    fDistance -= GetVectorDistance(fClosestPoint, fPlayerPos);
+
+    if (fPlayerPos[2] < fClosestPoint[2])
+    {
+        // Player is below the point, subtract extra points.
+
+        // We want to prioritize height so that
+        // the bot will actually get on top of the end platform
+        // and not get stuck at a local maximum underneath it.
+        fDistance -= (fClosestPoint[2] - fPlayerPos[2]) * g_fVerticalFitnessScale;
+    }
     
     // Set fitness to final distance
     g_fGAIndividualFitness[individual] = fDistance;
@@ -2636,6 +2649,14 @@ public void CalculateFitness(int individual)
     if (g_bMadeToEnd)
     {
         g_fGAIndividualFitness[individual] += g_iLeftOverFrames;
+    }
+    else
+    {
+        // Add small amount of fitness if the simulation ends early,
+        // even when we don't make it to the end.
+        // This is to discourage the bot from just standing
+        // still on a platform or on top of a ramp.
+        g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 0.1;
     }
 
     // Reset end status
