@@ -66,6 +66,7 @@ bool g_bPopulation;                             // Population existence status
 bool g_bGAPlayback;                             // Generated individual playback status
 bool g_bDraw;                                   // Debug line draw status
 bool g_bMadeToEnd;                              // Individual reached end position status
+bool g_bShowKeys;                               // Show bots keypresses status
 
 int g_iBot = -1;                                // Bot client index
 int g_iBotTeam = 2;                             // Bot team
@@ -92,9 +93,10 @@ float g_fLastPos[3];                            // Position of individual during
 float g_fMutationChance = 0.01;                 // Button mutation chance
 float g_fRotationMutationChance = 0.03;         // Angles mutation chance
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
-float g_fVerticalFitnessScale = 2.0;            // Used for subtracting points if below the closest point on fitness line
+float g_fVerticalFitnessScale = 0.5;            // Used for subtracting points if below the closest point on fitness line
 
 File g_hFile;                                   // File handle
+Handle g_hShowKeys;                             // Show keys hud handle
 
 char g_cBotName[] = "GA-BOT";                       // Name of the bot
 char g_cPrintPrefix[] = "[{orange}GA{default}]";    // Chat prefix for prints
@@ -110,7 +112,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf",
-    version = "1.0.6",
+    version = "1.0.7",
     url = "https://github.com/laurirasanen"
 };
 
@@ -165,12 +167,16 @@ public void OnPluginStart()
     // Debug commands
     RegConsoleCmd("ga_debug", CmdDebug, "");        // Draw debug lines in-game
     RegConsoleCmd("ga_fitness", CmdFitness, "");    // Print fitness of each individual in population
+    RegConsoleCmd("ga_skeys", CmdShowKeys, "");     // Toggle display of bots keys
     
     // Start a timer for spawning bot
     CreateTimer(1.0, Timer_SetupBot);
 
     // Set server config
     ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
+
+    // Create hud handle for show keys
+    g_hShowKeys = CreateHudSynchronizer();
 
     // Create required directories
     if(!FileExists("/GA/"))
@@ -303,6 +309,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 {
                     g_bGAPlayback = false;
                     CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+
                     return Plugin_Continue;
                 }
 
@@ -554,6 +561,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             angles[0] = eyeAngles[0];
             angles[1] = eyeAngles[1];
             angles[2] = 0.0;
+
+            // Show keys
+            UpdateKeyDisplay();
 
             // Increment frame
             g_iSimCurrentFrame++;        
@@ -944,6 +954,22 @@ public Action CmdFitness(int client, int args)
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
         PrintToServer("%s Fitness of individual %d: %f", g_cPrintPrefixNoColor, i, g_fGAIndividualFitness[i]);
+    }
+}
+
+// Summary:
+// Handle show keys command
+public Action CmdShowKeys(int client, int args)
+{
+    g_bShowKeys = !g_bShowKeys;
+
+    if (g_bShowKeys)
+    {
+        CPrintToChatAll("%s Showing bots keys", g_cPrintPrefix);
+    }
+    else
+    {
+        CPrintToChatAll("%s Hiding bots keys", g_cPrintPrefix);
     }
 }
 
@@ -2948,4 +2974,68 @@ public void StopPlayback()
     }
 
     CPrintToChatAll("%s Playback stopped!", g_cPrintPrefix);
+}
+
+// Show keypresses of the bot
+public void UpdateKeyDisplay()
+{
+    if(!g_bShowKeys || !g_bSimulating)
+        return;
+
+    int iButtons = g_iGAIndividualInputsInt[g_iSimCurrentFrame / INPUT_INTERVAL][g_iSimIndex];
+    char sOutput[256];
+
+    if(iButtons & IN_FORWARD)
+        Format(sOutput, sizeof(sOutput), "     W\n");
+    else
+        Format(sOutput, sizeof(sOutput), "     -\n");
+    
+    /*
+    if(iButtons & IN_JUMP)
+        Format(sOutput, sizeof(sOutput), "%s     JUMP\n", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s     _   \n", sOutput);
+    */
+    
+    if(iButtons & IN_MOVELEFT)
+        Format(sOutput, sizeof(sOutput), "%s  A", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
+        
+    if(iButtons & IN_BACK)
+        Format(sOutput, sizeof(sOutput), "%s  S", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
+        
+    if(iButtons & IN_MOVERIGHT)
+        Format(sOutput, sizeof(sOutput), "%s  D", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
+    
+    /*
+    if(iButtons & IN_DUCK)
+        Format(sOutput, sizeof(sOutput), "%s       DUCK\n", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s       _   \n", sOutput);
+        
+    if(iButtons & IN_ATTACK)
+        Format(sOutput, sizeof(sOutput), "%sMOUSE1", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s_     ", sOutput);
+    
+    if(iButtons & IN_ATTACK2)
+        Format(sOutput, sizeof(sOutput), "%s  MOUSE2", sOutput);
+    else
+        Format(sOutput, sizeof(sOutput), "%s  _     ", sOutput);
+    */
+
+    SetHudTextParams(0.47, 0.67, 1.0, 255, 255, 255, 255);
+
+    for(int i=1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i))
+        {
+            ShowSyncHudText(i, g_hShowKeys, sOutput); 
+        }        
+    }
 }
