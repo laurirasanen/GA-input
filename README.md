@@ -10,4 +10,3 @@ Requires [VoiDeD's botcontroller extension](https://github.com/VoiDeD/sourcemod-
 
 ## Demo videos
 [![YouTube demo video](http://img.youtube.com/vi/RzLEOIzrDYI/0.jpg)](http://www.youtube.com/watch?v=RzLEOIzrDYI)
-[![YouTube demo video](http://img.youtube.com/vi/YiAl9LVUc0U/0.jpg)](http://www.youtube.com/watch?v=YiAl9LVUc0U)
