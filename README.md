@@ -8,5 +8,5 @@ Requires [VoiDeD's botcontroller extension](https://github.com/VoiDeD/sourcemod-
 
 [Available commands](https://github.com/laurirasanen/GA-input/blob/master/scripting/GA-input.sp#L128-L170)
 
-## Demo videos
+## Demo video
 [![YouTube demo video](http://img.youtube.com/vi/RzLEOIzrDYI/0.jpg)](http://www.youtube.com/watch?v=RzLEOIzrDYI)
