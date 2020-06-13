@@ -75,6 +75,7 @@ int g_iSimIndex;                                // Individual index being simula
 int g_iSimCurrentFrame;                         // Current frame of simulation
 int g_iTargetGen;                               // Target generation to generate until
 int g_iCurrentGen;                              // Current generation index
+int g_iLastImproveGen;
 int g_iGAIndividualInputsInt[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE];  // Button inputs of individuals
 int g_iFrames;                                  // Frame cutoff (chromosome length)
 int g_iRecordingClient = -1;                    // Recording client index
@@ -90,10 +91,15 @@ float g_fGACheckPoints[MAX_CHECKPOINTS][3];     // Checkpoints of fitness line
 float g_fTelePos[3] = { 0.0, 0.0, 0.0 };        // Position where individual teleported
 float g_fOverrideFitness;                       // Override to use for individual fitness
 float g_fLastPos[3];                            // Position of individual during last tick
-float g_fMutationChance = 0.01;                 // Button mutation chance
-float g_fRotationMutationChance = 0.03;         // Angles mutation chance
+float g_fMutationChance = 0.1;                 // Button mutation chance
+float g_fRotationMutationChance = 0.3;         // Angles mutation chance
+float g_fMinMutationChance = 0.005;
+float g_fMaxMutationChance = 0.2;
+float g_fMinRotationMutationChance = 0.01;
+float g_fMaxRotationMutationChance = 0.6;
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
 float g_fVerticalFitnessScale = 0.5;            // Used for subtracting points if below the closest point on fitness line
+float g_fLastImproveFitness = -1000000000000.0;
 
 File g_hFile;                                   // File handle
 Handle g_hShowKeys;                             // Show keys hud handle
@@ -1849,15 +1855,15 @@ public Action CmdSetFrames(int client, int args)
 // Handle mutation chance command
 public Action CmdSetMutationChance(int client, int args)
 {
-    if(args < 1)
+    if(args < 2)
     {
         if(client == 0)
         {
-            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+            PrintToServer("%s Missing number arguments", g_cPrintPrefixNoColor);
         }
         else
         {
-            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+            CPrintToChat(client, "%s Missing number arguments", g_cPrintPrefix);
         }
 
         return Plugin_Handled;
@@ -1868,7 +1874,24 @@ public Action CmdSetMutationChance(int client, int args)
     GetCmdArg(1, arg, sizeof(arg));
 
     // Parse to float
-    if(!StringToFloatEx(arg, g_fMutationChance))
+    if(!StringToFloatEx(arg, g_fMinMutationChance))
+    {
+        if(client == 0)
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+
+        return Plugin_Handled;
+    }
+
+    GetCmdArg(2, arg, sizeof(arg));
+
+    // Parse to float
+    if(!StringToFloatEx(arg, g_fMaxMutationChance))
     {
         if(client == 0)
         {
@@ -1884,11 +1907,11 @@ public Action CmdSetMutationChance(int client, int args)
 
     if(client == 0)
     {
-        PrintToServer("%s Mutation chance set to %f", g_cPrintPrefixNoColor, g_fMutationChance);
+        PrintToServer("%s Mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinMutationChance, g_fMaxMutationChance);
     }
     else
     {
-        CPrintToChat(client, "%s Mutation chance set to %f", g_cPrintPrefix, g_fMutationChance);
+        CPrintToChat(client, "%s Mutation chance set to [%f:%f]", g_cPrintPrefix, g_fMinMutationChance, g_fMaxMutationChance);
     }
 
     return Plugin_Handled;
@@ -1898,15 +1921,15 @@ public Action CmdSetMutationChance(int client, int args)
 // Handle rotation mutation chance command
 public Action CmdSetRotationMutationChance(int client, int args)
 {
-    if(args < 1)
+    if(args < 2)
     {
         if(client == 0)
         {
-            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+            PrintToServer("%s Missing number arguments", g_cPrintPrefixNoColor);
         }
         else
         {
-            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+            CPrintToChat(client, "%s Missing number arguments", g_cPrintPrefix);
         }
 
         return Plugin_Handled;
@@ -1917,7 +1940,24 @@ public Action CmdSetRotationMutationChance(int client, int args)
     GetCmdArg(1, arg, sizeof(arg));
 
     // Parse to float
-    if(!StringToFloatEx(arg, g_fRotationMutationChance))
+    if(!StringToFloatEx(arg, g_fMinRotationMutationChance))
+    {
+        if(client == 0)
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+
+        return Plugin_Handled;
+    }
+
+    GetCmdArg(2, arg, sizeof(arg));
+
+    // Parse to float
+    if(!StringToFloatEx(arg, g_fMaxRotationMutationChance))
     {
         if(client == 0)
         {
@@ -1933,11 +1973,11 @@ public Action CmdSetRotationMutationChance(int client, int args)
 
     if(client == 0)
     {
-        PrintToServer("%s Rotation mutation chance set to %f", g_cPrintPrefixNoColor, g_fRotationMutationChance);
+        PrintToServer("%s Rotation mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinRotationMutationChance, g_fMaxRotationMutationChance);
     }
     else
     {
-        CPrintToChat(client, "%s Rotation mutation chance set to %f", g_cPrintPrefix, g_fRotationMutationChance);
+        CPrintToChat(client, "%s Rotation mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinRotationMutationChance, g_fMaxRotationMutationChance);
     }
 
     return Plugin_Handled;
@@ -2751,6 +2791,11 @@ public void Breed()
     }
 
     SortFloats(fOrder, POPULATION_SIZE, Sort_Descending);
+    if (fOrder[0] > g_fLastImproveFitness)
+    {
+        g_fLastImproveFitness = fOrder[0];
+        g_iLastImproveGen = g_iCurrentGen;
+    }
 
     // Get the indices of fittest 50% - LUCKY_FEW individuals
     int iFittest[POPULATION_SIZE/2];
@@ -2955,7 +3000,33 @@ public void Breed()
 
     g_iCurrentGen++;
 
-    PrintToServer("%s Generation %d breeded!", g_cPrintPrefixNoColor, g_iCurrentGen);
+    // Typically we want to reduce mutation chance the longer 
+    // the algorithm has been running.
+    bool bReduce = true;
+
+    // However if we are stuck in a local maximum it might be 
+    // due to a mutation chance that is either too high or too low.
+    // Let's wiggle it about if we've been stuck for too long.
+    int iGenSinceImprove = g_iCurrentGen - g_iLastImproveGen;
+    if (iGenSinceImprove % 20 >= 15)
+    {
+        bReduce = false;
+    }
+
+    if (bReduce)
+    {
+        // Reduce mutation chance
+        g_fMutationChance = (g_fMutationChance + g_fMinMutationChance) * 0.5;
+        g_fRotationMutationChance = (g_fRotationMutationChance + g_fMinRotationMutationChance) * 0.5;
+    }
+    else
+    {
+        // Increase mutation chance
+        g_fMutationChance = (g_fMutationChance + g_fMaxMutationChance) * 0.5;
+        g_fRotationMutationChance = (g_fRotationMutationChance + g_fMaxRotationMutationChance) * 0.5;
+    }    
+
+    PrintToServer("%s Generation %d breeded! mC: %f, rMC: %f", g_cPrintPrefixNoColor, g_iCurrentGen, g_fMutationChance, g_fRotationMutationChance);
 
     ServerCommand("host_timescale %f", g_fTimeScale);  
 
