@@ -1,7 +1,7 @@
 /* ****************************************************************
     GA-input: Genetic algorithm plugin for Team Fortress 2.
 
-    Copyright (C) 2019  Lauri Räsänen
+    Copyright (C) 2020 Lauri Räsänen
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -47,13 +47,20 @@
 // ****************************************************************
 // Constants
 // ****************************************************************
+#define MODE_RJ true
 #define MAX_CHECKPOINTS 100
 #define MAX_FRAMES 1000         // Max length of an individual, about 15 seconds (assuming 66.6 ticks/s)
-#define POPULATION_SIZE 2000
-#define LUCKY_FEW 200           // Individuals not part of the fittest chosen to be parents
+#define POPULATION_SIZE 500
+#define LUCKY_FEW 50            // Individuals not part of the fittest chosen to be parents
 #define INPUT_INTERVAL 20       // How many ticks to repeat inputs, MAX_FRAMES must be evenly divisible by this
-#define ANGLE_DELTA 2.5         // The maximum view angle change in a tick
-#define MAX_PITCH 30.0          // How far up or down the view can be pitched
+
+#if MODE_RJ
+#define ANGLE_DELTA 6.0         // The maximum view angle change in a tick
+#define MAX_PITCH 89.0          // How far up or down the view can be pitched
+#else
+#define ANGLE_DELTA 2.5
+#define MAX_PITCH 30.0
+#endif
 
 // ****************************************************************
 // Global variables
@@ -70,7 +77,11 @@ bool g_bShowKeys;                               // Show bots keypresses status
 
 int g_iBot = -1;                                // Bot client index
 int g_iBotTeam = 2;                             // Bot team
-int g_iPossibleButtons[5] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT};  // Buttons that can be generated
+#if MODE_RJ
+int g_iPossibleButtons[7] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT, IN_ATTACK, IN_DUCK};  // Buttons that can be generated
+#else
+int g_iPossibleButtons[5] = {IN_JUMP, IN_DUCK, IN_FORWARD, IN_MOVELEFT, IN_MOVERIGHT};
+#endif
 int g_iSimIndex;                                // Individual index being simulated
 int g_iSimCurrentFrame;                         // Current frame of simulation
 int g_iTargetGen;                               // Target generation to generate until
@@ -117,8 +128,8 @@ public Plugin myinfo =
 {
     name = "GA-input",
     author = "laurirasanen",
-    description = "Genetic algorithm for surf",
-    version = "1.0.7",
+    description = "Genetic algorithm for surf and rocketjump",
+    version = "1.0.8",
     url = "https://github.com/laurirasanen"
 };
 
@@ -179,7 +190,7 @@ public void OnPluginStart()
     CreateTimer(1.0, Timer_SetupBot);
 
     // Set server config
-    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
+    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; sv_timeout 120");
 
     // Create hud handle for show keys
     g_hShowKeys = CreateHudSynchronizer();
@@ -228,7 +239,7 @@ public void OnMapStart()
     CreateTimer(1.0, Timer_SetupBot);
 
     // Reapply server config
-    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; exec surf; sv_timeout 120");
+    ServerCommand("sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; sv_timeout 120");
 }
 
 // Summary:
@@ -499,7 +510,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             // Add impulse 101 to refill health and ammo
             impulse |= 101;
             
-            // Buttons don't do anything for the bot,
+            // Movement buttons don't do anything for the bot,
             // set desired velocity manually based on buttons.
             // Desired velocity still gets capped by class max movement speed,
             // use 400 to cover max movement speed of all classes.
@@ -525,8 +536,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 vel[1] = 400.0;
             }
             
-            // Reset buttons to prevent jumping and ducking for now..
-            buttons = 0;
+            // Remove movement buttons to be sure
+            buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
 
             // Get delta angles for current frame
             float eyeAngles[3];
@@ -615,15 +626,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                 vel[1] = 400.0;
             }
 
-            // Disable attack
-            buttons &= ~IN_ATTACK;
-            buttons &= ~IN_ATTACK2;
-
             // Write buttons and angles to file
             g_hFile.WriteLine("%d,%.16f,%.16f", buttons, angles[0], angles[1]);
 
-            // Disable button based movement
-            buttons = 0;
+            // Remove movement buttons to be sure
+            buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
 
             return Plugin_Changed;
         }
@@ -682,7 +689,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     }
 
                     // Disable button based movement
-                    buttons = 0;
+                    buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
 
                     // Parse angles
                     angles[0] = StringToFloat(butt[1]);
@@ -2193,8 +2200,10 @@ public Action CmdStopLoop(int client, int args)
 // Handle breeding loop command
 public Action CmdLoop(int client, int args)
 {
+#if !MODE_RJ
     // Prevent bot from taking damage
     SetEntProp(g_iBot, Prop_Data, "m_takedamage", 0, 0);
+#endif
 
     if(args < 1)
     {
@@ -2355,8 +2364,13 @@ public Action Timer_SetupBot(Handle hTimer)
     }
 
     ChangeClientTeam(g_iBot, g_iBotTeam);
+#if MODE_RJ
+    TF2_SetPlayerClass(g_iBot, TFClass_Soldier);
+#else
     TF2_SetPlayerClass(g_iBot, TFClass_Pyro);
+#endif
     ServerCommand("mp_waitingforplayers_cancel 1;");
+    //FakeClientCommand(g_iBot, "sm_rocketsim");
 }
 
 // Summary:
@@ -2488,7 +2502,7 @@ void GeneratePopulation(int iStartIndex = 0)
     {
         for(int t = 0; t < g_iFrames/INPUT_INTERVAL; t++)
         {
-            for(int i = 0; i < 5; i++)
+            for(int i = 0; i < sizeof(g_iPossibleButtons); i++)
             {
                 // Random key inputs
                 if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
@@ -2912,7 +2926,7 @@ public void Breed()
                 }
 
                 // Get buttons from parent
-                for(int j = 0; j < 5; j++)
+                for(int j = 0; j < sizeof(g_iPossibleButtons); j++)
                 {
                     // Check if parent has button
                     if(g_iGAIndividualInputsInt[t][iParents[i][iCrossParent]] & g_iPossibleButtons[j] == g_iPossibleButtons[j])
@@ -3082,23 +3096,21 @@ public void UpdateKeyDisplay()
         Format(sOutput, sizeof(sOutput), "%s  D", sOutput);
     else
         Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
-    
-    /*
+
     if(iButtons & IN_DUCK)
         Format(sOutput, sizeof(sOutput), "%s       DUCK\n", sOutput);
     else
-        Format(sOutput, sizeof(sOutput), "%s       _   \n", sOutput);
-        
+        Format(sOutput, sizeof(sOutput), "%s       _   \n", sOutput);    
+
     if(iButtons & IN_ATTACK)
         Format(sOutput, sizeof(sOutput), "%sMOUSE1", sOutput);
     else
-        Format(sOutput, sizeof(sOutput), "%s_     ", sOutput);
+        Format(sOutput, sizeof(sOutput), "%s_     ", sOutput);    
     
     if(iButtons & IN_ATTACK2)
         Format(sOutput, sizeof(sOutput), "%s  MOUSE2", sOutput);
     else
-        Format(sOutput, sizeof(sOutput), "%s  _     ", sOutput);
-    */
+        Format(sOutput, sizeof(sOutput), "%s  _     ", sOutput);    
 
     SetHudTextParams(0.47, 0.67, 1.0, 255, 255, 255, 255);
 
