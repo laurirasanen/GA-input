@@ -39,6 +39,12 @@
 #include <botcontroller>
 
 // ****************************************************************
+// Plugin modules
+// ****************************************************************
+#include "core/debug.sp"
+#include "core/util.sp"
+
+// ****************************************************************
 // Pragma
 // ****************************************************************
 #pragma semicolon 1         // Don't allow missing semicolons
@@ -514,27 +520,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             // set desired velocity manually based on buttons.
             // Desired velocity still gets capped by class max movement speed,
             // use 400 to cover max movement speed of all classes.
-            if (buttons & IN_FORWARD)
-            {
-                vel[0] = 400.0;
-            }
-            else
-            {
-                vel[0] = 0.0;
-            }
-            
-            if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
-            {
-                vel[1] = 0.0;
-            }
-            else if (buttons & IN_MOVELEFT)
-            {
-                vel[1] = -400.0;
-            }
-            else if (buttons & IN_MOVERIGHT)
-            {
-                vel[1] = 400.0;
-            }
+            VelocityFromButtons(vel, buttons);
             
             // Remove movement buttons to be sure
             buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
@@ -555,33 +541,18 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             eyeAngles[0] += g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][0];
             eyeAngles[1] += g_fGAIndividualInputsFloat[g_iSimCurrentFrame/INPUT_INTERVAL][g_iSimIndex][1];
 
-            // clamp pitch
-            if (eyeAngles[0] < -MAX_PITCH)
-            {
-                eyeAngles[0] = -MAX_PITCH;
-            }
-            else if (eyeAngles[0] > MAX_PITCH)
-            {
-                eyeAngles[0] = MAX_PITCH;
-            }
-
-            // yaw wrap around
-            if (eyeAngles[1] < -180.0)
-            {
-                eyeAngles[1] += 360.0;
-            }
-            else if (eyeAngles[1] > 180.0)
-            {
-                eyeAngles[1] -= 360.0;
-            }
+            ClampEyeAngles(eyeAngles, MAX_PITCH);
 
             angles[0] = eyeAngles[0];
             angles[1] = eyeAngles[1];
             angles[2] = 0.0;
 
             // Show keys
-            UpdateKeyDisplay();
-
+            if(g_bShowKeys)
+            {
+                UpdateKeyDisplay(g_iGAIndividualInputsInt[g_iSimCurrentFrame / INPUT_INTERVAL][g_iSimIndex], g_hShowKeys);
+            }
+            
             // Increment frame
             g_iSimCurrentFrame++;        
             
@@ -604,27 +575,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             }
             
             // Use same movement method as the bot for consistency
-            if (buttons & IN_FORWARD)
-            {
-                vel[0] = 400.0;
-            }
-            else
-            {
-                vel[0] = 0.0;
-            }
-            
-            if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT)
-            {
-                vel[1] = 0.0;
-            }
-            else if (buttons & IN_MOVELEFT)
-            {
-                vel[1] = -400.0;
-            }
-            else if (buttons & IN_MOVERIGHT)
-            {
-                vel[1] = 400.0;
-            }
+            VelocityFromButtons(vel, buttons);
 
             // Write buttons and angles to file
             g_hFile.WriteLine("%d,%.16f,%.16f", buttons, angles[0], angles[1]);
@@ -666,27 +617,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
                     buttons = StringToInt(butt[0]);
                     
                     // Use same movement method as the bot for consistency
-                    if (buttons & IN_FORWARD)
-                    {
-                        vel[0] = 400.0;
-                    }
-                    else
-                    {
-                        vel[0] = 0.0;
-                    }
-                    
-                    if (buttons & (IN_MOVELEFT|IN_MOVERIGHT) == IN_MOVELEFT|IN_MOVERIGHT) 
-                    {
-                        vel[1] = 0.0;
-                    }
-                    else if (buttons & IN_MOVELEFT)
-                    {
-                        vel[1] = -400.0;
-                    }
-                    else if (buttons & IN_MOVERIGHT)
-                    {
-                        vel[1] = 400.0;
-                    }
+                    VelocityFromButtons(vel, buttons);
 
                     // Disable button based movement
                     buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
@@ -948,7 +879,7 @@ public Action CmdDebug(int client, int args)
 
     if(g_bDraw)
     {
-        DrawLines();
+        DrawLines(g_fGACheckPoints, MAX_CHECKPOINTS, g_fGAStartPos, g_fGAEndPos);
         CPrintToChatAll("%s Drawing debug lines", g_cPrintPrefix);
     }
     else
@@ -1716,7 +1647,7 @@ public Action CmdLoadConfig(int client, int args)
     if(g_bDraw)
     {
         HideLines();
-        DrawLines();
+        DrawLines(g_fGACheckPoints, MAX_CHECKPOINTS, g_fGAStartPos, g_fGAEndPos);
     }
 
     // Clamp frame cutoff
@@ -2040,7 +1971,7 @@ public Action CmdRemoveCheckpoint(int client, int args)
     if(g_bDraw)
     {
         HideLines();
-        DrawLines();
+        DrawLines(g_fGACheckPoints, MAX_CHECKPOINTS, g_fGAStartPos, g_fGAEndPos);
     }
 
     return Plugin_Handled;
@@ -2079,7 +2010,7 @@ public Action CmdAddCheckpoint(int client, int args)
     if(g_bDraw)
     {
         HideLines();
-        DrawLines();
+        DrawLines(g_fGACheckPoints, MAX_CHECKPOINTS, g_fGAStartPos, g_fGAEndPos);
     }
 
     return Plugin_Handled;
@@ -2103,7 +2034,7 @@ public Action CmdStart(int client, int args)
     if(g_bDraw)
     {
         HideLines();
-        DrawLines();
+        DrawLines(g_fGACheckPoints, MAX_CHECKPOINTS, g_fGAStartPos, g_fGAEndPos);
     }
 
     CPrintToChat(client, "%s Start set", g_cPrintPrefix);
@@ -2128,7 +2059,7 @@ public Action CmdEnd(int client, int args)
     if(g_bDraw)
     {
         HideLines();
-        DrawLines();
+        DrawLines(g_fGACheckPoints, MAX_CHECKPOINTS, g_fGAStartPos, g_fGAEndPos);
     }
 
     CPrintToChat(client, "%s End set", g_cPrintPrefix);
@@ -2390,104 +2321,6 @@ public Action MeasureTimer(Handle timer, int index)
     g_iSimIndex = index;
     g_iSimCurrentFrame = 0;
     g_bSimulating = true;
-}
-
-// Summary:
-// Draws debug lines to all clients
-public void DrawLines() 
-{
-    // Draw laser between start position, all checkpoints and end position
-    for(int i = 0; i < MAX_CHECKPOINTS; i++) 
-    {
-        // Check if checkpoint is valid
-        if(g_fGACheckPoints[i][0] != 0 && g_fGACheckPoints[i][1] != 0 && g_fGACheckPoints[i][2] != 0)
-        {
-            if(i == 0)
-            {
-                // Laser from start position to first checkpoint
-                DrawLaser(g_fGAStartPos, g_fGACheckPoints[i], 0, 255, 0);
-            } 
-
-            if(i + 1 < MAX_CHECKPOINTS)
-            {
-                // Check if checkpoint [i + 1] is valid
-                if(g_fGACheckPoints[i + 1][0] != 0 && g_fGACheckPoints[i + 1][1] != 0 && g_fGACheckPoints[i + 1][2] != 0)
-                {
-                    // Laser from checkpoint i to i + 1
-                    DrawLaser(g_fGACheckPoints[i], g_fGACheckPoints[i + 1], 0, 255, 0);
-                }
-                else
-                {
-                    // Laser to end
-                    DrawLaser(g_fGACheckPoints[i], g_fGAEndPos, 0, 255, 0);
-                }
-            }
-            else
-            {
-                // Laser to end
-                DrawLaser(g_fGACheckPoints[i], g_fGAEndPos, 0, 255, 0);
-            }
-        }
-        else
-        {
-            if(i == 0)
-            {
-                // No checkpoints
-                DrawLaser(g_fGAStartPos, g_fGAEndPos, 0, 255, 0);
-            }
-        }
-    }
-}
-
-// Summary:
-// Draw a laser beam to all clients
-// https://forums.alliedmods.net/showthread.php?t=190685
-public int DrawLaser(float start[3], float end[3], int red, int green, int blue)
-{
-    int ent = CreateEntityByName("env_beam");
-
-    if (ent != -1) 
-    {
-        TeleportEntity(ent, start, NULL_VECTOR, NULL_VECTOR);
-        SetEntityModel(ent, "sprites/laser.vmt");
-        SetEntPropVector(ent, Prop_Data, "m_vecEndPos", end);
-        DispatchKeyValue(ent, "targetname", "beam");
-        char buffer[32];
-        Format(buffer, sizeof(buffer), "%d %d %d", red, green, blue);
-        DispatchKeyValue(ent, "rendercolor", buffer); //color
-        DispatchKeyValue(ent, "renderamt", "100");
-        DispatchSpawn(ent);
-        SetEntPropFloat(ent, Prop_Data, "m_fWidth", 4.0); // how big the beam will be
-        SetEntPropFloat(ent, Prop_Data, "m_fEndWidth", 4.0);
-        ActivateEntity(ent);
-        AcceptEntityInput(ent, "TurnOn");
-    }
-
-    return ent;
-}
-
-// Summary:
-// Hide debug lines
-public void HideLines() {
-    char name[32];
-
-    // Loop through entities
-    // starting after client entities
-    for(int i = MaxClients + 1; i <= GetMaxEntities(); i++)
-    {
-        if(!IsValidEntity(i))
-        {
-            continue;
-        }
-    
-        if(GetEdictClassname(i, name, sizeof(name)))
-        {
-            if(StrEqual("env_beam", name, false))
-            {
-                RemoveEdict(i);
-            }
-        }
-    }
 }
 
 // Summary:
@@ -2763,34 +2596,6 @@ public void MeasureFitness(int index)
 }
 
 // Summary:
-// Get the closest point on a line from point A to B
-// https://stackoverflow.com/a/47484153
-public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
-{
-    float AB[3];
-    SubtractVectors(B, A, AB);
-
-    float AP[3];
-    SubtractVectors(P, A, AP);
-
-    float lengthSqrAB = AB[0] * AB[0] + AB[1] * AB[1] + AB[2] * AB[2];
-    float t = (AP[0] * AB[0] + AP[1] * AB[1] + AP[2] * AB[2]) / lengthSqrAB;
-
-    if(t < 0.0)
-    {
-        t = 0.0;
-    }
-
-    if(t > 1.0)
-    {
-        t = 1.0;
-    }
-
-    ScaleVector(AB, t);
-    AddVectors(A, AB, ref);
-}
-
-// Summary:
 // Breed a new generation
 public void Breed()
 {
@@ -3059,66 +2864,4 @@ public void StopPlayback()
     }
 
     CPrintToChatAll("%s Playback stopped!", g_cPrintPrefix);
-}
-
-// Show keypresses of the bot
-public void UpdateKeyDisplay()
-{
-    if(!g_bShowKeys || !g_bSimulating)
-        return;
-
-    int iButtons = g_iGAIndividualInputsInt[g_iSimCurrentFrame / INPUT_INTERVAL][g_iSimIndex];
-    char sOutput[256];
-
-    if(iButtons & IN_FORWARD)
-        Format(sOutput, sizeof(sOutput), "     W\n");
-    else
-        Format(sOutput, sizeof(sOutput), "     -\n");
-    
-    /*
-    if(iButtons & IN_JUMP)
-        Format(sOutput, sizeof(sOutput), "%s     JUMP\n", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s     _   \n", sOutput);
-    */
-    
-    if(iButtons & IN_MOVELEFT)
-        Format(sOutput, sizeof(sOutput), "%s  A", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
-        
-    if(iButtons & IN_BACK)
-        Format(sOutput, sizeof(sOutput), "%s  S", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
-        
-    if(iButtons & IN_MOVERIGHT)
-        Format(sOutput, sizeof(sOutput), "%s  D", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s  -", sOutput);
-
-    if(iButtons & IN_DUCK)
-        Format(sOutput, sizeof(sOutput), "%s       DUCK\n", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s       _   \n", sOutput);    
-
-    if(iButtons & IN_ATTACK)
-        Format(sOutput, sizeof(sOutput), "%sMOUSE1", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s_     ", sOutput);    
-    
-    if(iButtons & IN_ATTACK2)
-        Format(sOutput, sizeof(sOutput), "%s  MOUSE2", sOutput);
-    else
-        Format(sOutput, sizeof(sOutput), "%s  _     ", sOutput);    
-
-    SetHudTextParams(0.47, 0.67, 1.0, 255, 255, 255, 255);
-
-    for(int i=1; i <= MaxClients; i++)
-    {
-        if (IsClientInGame(i))
-        {
-            ShowSyncHudText(i, g_hShowKeys, sOutput); 
-        }        
-    }
 }
