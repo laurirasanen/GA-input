@@ -1,12 +1,12 @@
 /* ****************************************************************
-    debug.sp
+    util.sp
 
     Utility functions.
 **************************************************************** */
 
 // Summary:
-// Get the closest point on a line from point A to B
-public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
+// Get the closest point (out) on line AB to point P
+public void ClosestPoint(float A[3], float B[3], float P[3], float out[3])
 {
     float AB[3];
     SubtractVectors(B, A, AB);
@@ -28,7 +28,7 @@ public void ClosestPoint(float A[3], float B[3], float P[3], float ref[3])
     }
 
     ScaleVector(AB, t);
-    AddVectors(A, AB, ref);
+    AddVectors(A, AB, out);
 }
 
 // Summary:

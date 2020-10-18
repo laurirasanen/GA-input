@@ -19,10 +19,10 @@ public int DrawLaser(float start[3], float end[3], int red, int green, int blue)
         DispatchKeyValue(ent, "targetname", "beam");
         char buffer[32];
         Format(buffer, sizeof(buffer), "%d %d %d", red, green, blue);
-        DispatchKeyValue(ent, "rendercolor", buffer); //color
+        DispatchKeyValue(ent, "rendercolor", buffer);
         DispatchKeyValue(ent, "renderamt", "100");
         DispatchSpawn(ent);
-        SetEntPropFloat(ent, Prop_Data, "m_fWidth", 4.0); // how big the beam will be
+        SetEntPropFloat(ent, Prop_Data, "m_fWidth", 4.0);
         SetEntPropFloat(ent, Prop_Data, "m_fEndWidth", 4.0);
         ActivateEntity(ent);
         AcceptEntityInput(ent, "TurnOn");
