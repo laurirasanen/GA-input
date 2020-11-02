@@ -106,11 +106,14 @@ float g_fGACheckPoints[MAX_CHECKPOINTS][3];     // Checkpoints of fitness line
 float g_fTelePos[3] = { 0.0, 0.0, 0.0 };        // Position where individual teleported
 float g_fOverrideFitness;                       // Override to use for individual fitness
 float g_fLastPos[3];                            // Position of individual during last tick
-float g_fMutationChance = 0.03;                 // Button mutation chance
-float g_fRotationMutationChance = 0.05;         // Angles mutation chance
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
 float g_fVerticalFitnessScale = 0.5;            // Used for subtracting points if below the closest point on fitness line
 float g_fLastImproveFitness = -1000000000000.0;
+// These values were found to be ideal for
+// surf_beginner stage 1 with input interval of 20 ticks.
+// You'll probably want to lower these if you lower the input interval.
+float g_fMutationChance = 0.15;                 // Button mutation chance
+float g_fRotationMutationChance = 0.1;          // Angles mutation chance
 
 File g_hFile;                                   // File handle
 Handle g_hShowKeys;                             // Show keys hud handle
@@ -128,7 +131,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.11",
+    version = "1.0.12",
     url = "https://github.com/laurirasanen"
 };
 
@@ -639,7 +642,7 @@ void GeneratePopulation(int iStartIndex = 0)
             for(int i = 0; i < sizeof(g_iPossibleButtons); i++)
             {
                 // Random key inputs
-                if(GetRandomFloat(0.0, 1.0) < g_fMutationChance)
+                if(GetRandomFloat(0.0, 1.0) < g_fMutationChance * 2.0)
                 {
                     if(g_iGAIndividualInputsInt[t][p] & g_iPossibleButtons[i] == g_iPossibleButtons[i])
                     {
@@ -655,7 +658,7 @@ void GeneratePopulation(int iStartIndex = 0)
             }
 
             // Random mouse movement
-            if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance)
+            if(GetRandomFloat(0.0, 1.0) < g_fRotationMutationChance * 2.0)
             {
                 g_fGAIndividualInputsFloat[t][p][0] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
                 g_fGAIndividualInputsFloat[t][p][1] = GetRandomFloat(-ANGLE_DELTA, ANGLE_DELTA);
@@ -2288,7 +2291,7 @@ public Action CmdSetFrames(int client, int args)
 // Handle mutation chance command
 public Action CmdSetMutationChance(int client, int args)
 {
-    if(args < 2)
+    if(args < 1)
     {
         if(client == 0)
         {
@@ -2585,6 +2588,7 @@ public Action CmdClear(int client, int args)
     g_bPopulation = false;
     g_iTargetGen = 0;
     g_iCurrentGen = 0;
+    g_iLastImproveGen = 0;
 
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
