@@ -94,6 +94,7 @@ int g_iFrames;                                  // Frame cutoff (chromosome leng
 int g_iRecordingClient = -1;                    // Recording client index
 int g_iLeftOverFrames = 0;                      // Time saved by individual when reaching end
 int g_iSolutionStopDelay = -1;                  // Automatically stop looping after this many generations since first solution. <0 = disabled
+int g_iLoopBeginTime = 0;                       // Unix timestamp for when generation loop started
 
 float g_fTimeScale = 1000.0;                    // Timescale used for simulating
 float g_fGAIndividualInputsFloat[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE][2];   // Angle inputs of individuals
@@ -127,7 +128,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.10",
+    version = "1.0.11",
     url = "https://github.com/laurirasanen"
 };
 
@@ -595,13 +596,24 @@ Action OnIndividualEnd()
             }
         }
 
-        PrintToServer("%s Generation %d | best: %d (%f) | imp+: %d", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness, g_iCurrentGen - g_iLastImproveGen);
+        char timeStamp[9];
+        FormatUnixTimestamp(timeStamp, GetTime() - g_iLoopBeginTime);
+
+        PrintToServer(
+            "%s Generation %d | best: %d (%f) | imp+: %d | time: %s", 
+            g_cPrintPrefixNoColor, 
+            g_iCurrentGen, 
+            fittestIndex, 
+            bestFitness, 
+            g_iCurrentGen - g_iLastImproveGen,
+            timeStamp
+        );
 
         // Continue to the next generation or stop looping
         if(g_iTargetGen > g_iCurrentGen)
         {
             Breed();
-        }                        
+        }
         else
         {
             PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
@@ -2656,6 +2668,7 @@ public Action CmdLoop(int client, int args)
     int gen = 0;
     if(StringToIntEx(arg, gen))
     {
+        g_iLoopBeginTime = GetTime();
         g_iTargetGen += gen;
 
         // Generate population if doesn't exist

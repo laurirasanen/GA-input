@@ -82,3 +82,20 @@ public void VelocityFromButtons(float fVel[3], int iButtons)
         fVel[1] = 400.0;
     }
 }
+
+public void FormatUnixTimestamp(char cTimeStamp[9], int iTime)
+{
+    int iHours = iTime / (60 * 60);
+    int iMinutes = (iTime % (60 * 60)) / (60);
+    int iSeconds = iTime % 60;
+
+    char cHours[3];
+    char cMinutes[3];
+    char cSeconds[3];
+
+    Format(cHours, 3, "%s%d", iHours < 9 ? "0" : "", iHours);
+    Format(cMinutes, 3, "%s%d", iMinutes < 9 ? "0" : "", iMinutes);
+    Format(cSeconds, 3, "%s%d", iSeconds < 9 ? "0" : "", iSeconds);
+
+    Format(cTimeStamp, 9, "%s:%s:%s", cHours, cMinutes, cSeconds);
+}
