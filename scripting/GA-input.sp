@@ -127,6 +127,7 @@ char g_cPrintPrefix[] = "[{orange}GA{default}]";    // Chat prefix for prints
 char g_cPrintPrefixNoColor[] = "[GA]";              // Prefix for server console prints
 char g_cLastRecord[64];                             // Name of last player recording
 char g_cServerConfig[] = "sv_cheats 1; tf_allow_server_hibernation 0; sm config SlowScriptTimeout 0; sv_timeout 300"; // Server commands to apply on load and map start
+char g_cFitnessOutFile[64];
 
 // Plugin info
 // https://sm.alliedmods.net/new-api/core/PluginInfo
@@ -135,7 +136,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.13",
+    version = "1.0.14",
     url = "https://github.com/laurirasanen"
 };
 
@@ -170,6 +171,7 @@ public void OnPluginStart()
     RegConsoleCmd("ga_mutation_chance", CmdSetMutationChance, "");                  // Set mutation chance for buttons
     RegConsoleCmd("ga_rotation_mutation_chance", CmdSetRotationMutationChance, ""); // Set mutation chance for rotation
     RegConsoleCmd("ga_solution_stop_delay", CmdSetSolutionStopDelay, ""); // Set delay for stopping after solution found
+    RegConsoleCmd("ga_fitness_out_file", CmdSetFitnessOutFile, ""); // Set file to output fitness data
     
     // Manual generation commands
     RegConsoleCmd("ga_gen", CmdGen, "");        // Generate new population
@@ -202,6 +204,10 @@ public void OnPluginStart()
     if(!FileExists("/GA/"))
     {
         CreateDirectory("/GA/", 557);       // Root directory
+    }
+    if(!FileExists("/GA/data/"))
+    {
+        CreateDirectory("/GA/data/", 557);  // Directory for fitness data
     }
     if(!FileExists("/GA/rec/"))
     {
@@ -616,6 +622,9 @@ Action OnIndividualEnd()
             timeStamp
         );
 
+        // Save fitness data to file if applicable
+        SaveGenFitness(bestFitness);
+
         // Continue to the next generation or stop looping
         if(g_iTargetGen > g_iCurrentGen)
         {
@@ -629,6 +638,31 @@ Action OnIndividualEnd()
     }
     
     return Plugin_Continue;
+}
+
+// Summary:
+// Append current generation fitness to file
+void SaveGenFitness(float fBestFitness)
+{
+    if (strlen(g_cFitnessOutFile) == 0) {
+        return;
+    }
+
+    // Open file for appending
+    g_hFile = OpenFile(g_cFitnessOutFile, "a+");
+    if(g_hFile == null)
+    {
+        PrintToServer("%s Invalid file handle '%s'", g_cPrintPrefixNoColor, g_cFitnessOutFile);
+        return;
+    }
+
+    // A comma delimited format might be useful here
+    // if we ever want to write different kinds of data.
+    // But since we're only interested in fitness right now,
+    // and we call this explicitly every generation, this is fine.
+    g_hFile.WriteLine("%f", fBestFitness);
+
+    g_hFile.Close();
 }
 
 // Summary:
@@ -2435,6 +2469,59 @@ public Action CmdSetSolutionStopDelay(int client, int args)
     {
         CPrintToChat(client, "%s Solution stop delay set to %d", g_cPrintPrefix, g_iSolutionStopDelay);
     }
+    return Plugin_Handled;
+}
+
+// Summary:
+// Handle command for setting output file for fitness data
+public Action CmdSetFitnessOutFile(int client, int args)
+{
+    if(args < 1)
+    {
+        if(client == 0)
+        {
+            PrintToServer("%s Missing file argument", g_cPrintPrefixNoColor);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Missing file argument", g_cPrintPrefix);
+        }
+        return Plugin_Handled;
+    }
+
+    // Get file from command args
+    char cArg[64];
+    GetCmdArg(1, cArg, sizeof(cArg));
+
+    if (strlen(cArg) == 0)
+    {
+        g_cFitnessOutFile = "";
+
+        if(client == 0)
+        {
+            PrintToServer("%s Fitness data file cleared", g_cPrintPrefixNoColor);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Fitness data file cleared", g_cPrintPrefix);
+        }
+
+        return Plugin_Handled;
+    }
+
+    // Append name to default data path
+    g_cFitnessOutFile = "/GA/data/";
+    StrCat(g_cFitnessOutFile, sizeof(g_cFitnessOutFile), cArg);
+
+    if(client == 0)
+    {
+        PrintToServer("%s Fitness data file set to %s", g_cPrintPrefixNoColor, g_cFitnessOutFile);
+    }
+    else
+    {
+        CPrintToChat(client, "%s Fitness data file set to %s", g_cPrintPrefix, g_cFitnessOutFile);
+    }
+
     return Plugin_Handled;
 }
 
