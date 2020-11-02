@@ -49,11 +49,11 @@
 // ****************************************************************
 // Constants
 // ****************************************************************
-#define MODE_RJ true
+#define MODE_RJ false
 #define MAX_CHECKPOINTS 100
 #define MAX_FRAMES 1000         // Max length of an individual, about 15 seconds (assuming 66.6 ticks/s)
-#define POPULATION_SIZE 500
-#define LUCKY_FEW 50            // Individuals not part of the fittest chosen to be parents
+#define POPULATION_SIZE 300
+#define LUCKY_FEW 30            // Individuals not part of the fittest chosen to be parents
 #define INPUT_INTERVAL 20       // How many ticks to repeat inputs, MAX_FRAMES must be evenly divisible by this
 
 #if MODE_RJ
@@ -109,11 +109,15 @@ float g_fLastPos[3];                            // Position of individual during
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
 float g_fVerticalFitnessScale = 0.5;            // Used for subtracting points if below the closest point on fitness line
 float g_fLastImproveFitness = -1000000000000.0;
-// These values were found to be ideal for
-// surf_beginner stage 1 with input interval of 20 ticks.
-// You'll probably want to lower these if you lower the input interval.
+// These values were found to be roughly ideal for input interval of 20 ticks.
+// You'll probably want to lower the one for movement keys if you lower the input interval.
+#if MODE_RJ
 float g_fMutationChance = 0.15;                 // Button mutation chance
 float g_fRotationMutationChance = 0.1;          // Angles mutation chance
+#else
+float g_fMutationChance = 0.05;
+float g_fRotationMutationChance = 0.1;
+#endif
 
 File g_hFile;                                   // File handle
 Handle g_hShowKeys;                             // Show keys hud handle
@@ -131,7 +135,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.12",
+    version = "1.0.13",
     url = "https://github.com/laurirasanen"
 };
 
@@ -603,7 +607,7 @@ Action OnIndividualEnd()
         FormatUnixTimestamp(timeStamp, GetTime() - g_iLoopBeginTime);
 
         PrintToServer(
-            "%s Generation %d | best: %d (%f) | imp+: %d | time: %s", 
+            "%s Generation %d | best: %d (%f) | imp^: %d | time: %s", 
             g_cPrintPrefixNoColor, 
             g_iCurrentGen, 
             fittestIndex, 
