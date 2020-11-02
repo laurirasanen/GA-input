@@ -105,12 +105,8 @@ float g_fGACheckPoints[MAX_CHECKPOINTS][3];     // Checkpoints of fitness line
 float g_fTelePos[3] = { 0.0, 0.0, 0.0 };        // Position where individual teleported
 float g_fOverrideFitness;                       // Override to use for individual fitness
 float g_fLastPos[3];                            // Position of individual during last tick
-float g_fMutationChance = 0.1;                  // Button mutation chance
-float g_fRotationMutationChance = 0.3;          // Angles mutation chance
-float g_fMinMutationChance = 0.005;
-float g_fMaxMutationChance = 0.2;
-float g_fMinRotationMutationChance = 0.01;
-float g_fMaxRotationMutationChance = 0.6;
+float g_fMutationChance = 0.03;                 // Button mutation chance
+float g_fRotationMutationChance = 0.05;         // Angles mutation chance
 float g_fEndCutoff = 200.0;                     // Distance from end position to end simulation
 float g_fVerticalFitnessScale = 0.5;            // Used for subtracting points if below the closest point on fitness line
 float g_fLastImproveFitness = -1000000000000.0;
@@ -131,7 +127,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.9",
+    version = "1.0.10",
     url = "https://github.com/laurirasanen"
 };
 
@@ -283,98 +279,16 @@ public Action OnPlayerRunCmd_Bot(int client, int &buttons, int &impulse, float v
         return Plugin_Continue;
     }
 
-    // Check if individual in population has already been measured
+    // Check if individual has already been measured (from previous generations)
     if(g_bGAIndividualMeasured[g_iSimIndex] && !g_bGAPlayback)
     {
-        g_iSimIndex++;
-        
-        // Last individual of population
-        if(g_iSimIndex == POPULATION_SIZE)
-        {
-            // Get best fitness of population
-            float bestFitness = 0.0;
-            int fittestIndex = 0;
-            for(int i = 0; i < POPULATION_SIZE; i++)
-            {
-                if(g_fGAIndividualFitness[i] > bestFitness)
-                {
-                    bestFitness = g_fGAIndividualFitness[i];
-                    fittestIndex = i;
-                }
-            }
-
-            PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
-
-            g_bSimulating = false;
-
-            // Continue to the next generation or stop looping
-            if(g_iTargetGen > g_iCurrentGen)
-            {
-                Breed();  
-            }                        
-            else
-            {
-                ServerCommand("host_timescale 1");
-            }               
-        }
-        
-        return Plugin_Continue;
+        return OnIndividualEnd();
     }
 
     // Check if we're at the end of this individual
     if(g_iSimCurrentFrame >= g_iFrames)
     {
-        g_bSimulating = false;
-        g_bGAIndividualMeasured[g_iSimIndex] = true;
-
-        CalculateFitness(g_iSimIndex);
-
-        // Return if playing back instead of measuring
-        if(g_bGAPlayback)
-        {
-            g_bGAPlayback = false;
-            CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-
-            return Plugin_Continue;
-        }
-
-        // Continue to the next individual if not last of population
-        g_iSimIndex++;
-
-        if(g_iSimIndex < POPULATION_SIZE)
-        {
-            MeasureFitness(g_iSimIndex);
-        }
-        else
-        {
-            // Get best fitness of population
-            float bestFitness = 0.0;
-            int fittestIndex = 0;
-
-            for(int i = 0; i < POPULATION_SIZE; i++)
-            {
-                if(g_fGAIndividualFitness[i] > bestFitness)
-                {
-                    bestFitness = g_fGAIndividualFitness[i];
-                    fittestIndex = i;
-                }
-            }
-
-            PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
-
-            // Continue to the next generation or stop looping
-            if(g_iTargetGen > g_iCurrentGen)
-            {
-                Breed();
-            }                        
-            else
-            {
-                PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
-                ServerCommand("host_timescale 1");
-            }
-        }
-        
-        return Plugin_Continue;
+        return OnIndividualEnd();
     }
     
     // Get bot's position
@@ -391,60 +305,10 @@ public Action OnPlayerRunCmd_Bot(int client, int &buttons, int &impulse, float v
             // Max velocity is 3500u/s on all 3 axes,
             // sqrt(sqrt(3500^2 + 3500^2)^2 + 3500^2) ~ 91
 
-            g_bSimulating = false;
-            g_bGAIndividualMeasured[g_iSimIndex] = true;
             // Set last position of bot before teleporting
             // for fitness calculation
             g_fTelePos = g_fLastPos;
-            // Set amount of frames saved from cutoff limit
-            g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
-            CalculateFitness(g_iSimIndex);
-
-            // Return if playing back instead of measuring
-            if(g_bGAPlayback)
-            {
-                g_bGAPlayback = false;
-                g_bSimulating = false;
-                CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                return Plugin_Continue;
-            }
-
-            // Continue to the next individual if not last of population
-            g_iSimIndex++;
-
-            if(g_iSimIndex < POPULATION_SIZE)
-            {
-                MeasureFitness(g_iSimIndex);
-            }
-            else
-            {
-                // Get best fitness of population
-                float bestFitness = 0.0;
-                int fittestIndex = 0;
-                for(int i = 0; i < POPULATION_SIZE; i++)
-                {
-                    if(g_fGAIndividualFitness[i] > bestFitness)
-                    {
-                        bestFitness = g_fGAIndividualFitness[i];
-                        fittestIndex = i;
-                    }
-                }
-
-                PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
-
-                // Continue to the next generation or stop looping
-                if(g_iTargetGen > g_iCurrentGen)
-                {
-                    Breed();
-                }                        
-                else
-                {
-                    PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
-                    ServerCommand("host_timescale 1");
-                }
-            }
-            
-            return Plugin_Continue;
+            return OnIndividualEnd();
         }
 
         // Check if bot is close enough to the end position
@@ -452,58 +316,8 @@ public Action OnPlayerRunCmd_Bot(int client, int &buttons, int &impulse, float v
         // to prevent finishing through floors and such)
         if (GetVectorDistance(fPos, g_fGAEndPos) < g_fEndCutoff && fPos[2] > g_fGAEndPos[2])
         {
-            g_bSimulating = false;
-            g_bGAIndividualMeasured[g_iSimIndex] = true;
             g_bMadeToEnd = true;
-            // Set amount of frames saved from cutoff limit
-            g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
-            CalculateFitness(g_iSimIndex);
-
-            // Return if playing back instead of measuring
-            if(g_bGAPlayback)
-            {
-                g_bGAPlayback = false;
-                g_bSimulating = false;
-                CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
-                return Plugin_Continue;
-            }
-
-            // Continue to the next individual if not last of population
-            g_iSimIndex++;
-
-            if(g_iSimIndex < POPULATION_SIZE)
-            {
-                MeasureFitness(g_iSimIndex);
-            }
-            else
-            {
-                // Get best fitness of population
-                float bestFitness = 0.0;
-                int fittestIndex = 0;
-                for(int i = 0; i < POPULATION_SIZE; i++)
-                {
-                    if(g_fGAIndividualFitness[i] > bestFitness)
-                    {
-                        bestFitness = g_fGAIndividualFitness[i];
-                        fittestIndex = i;
-                    }
-                }
-
-                PrintToServer("%s Best fitness of generation %d: %d (%f)", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness);
-
-                // Continue to the next generation or stop looping
-                if(g_iTargetGen > g_iCurrentGen)
-                {
-                    Breed();
-                }                        
-                else
-                {
-                    PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
-                    ServerCommand("host_timescale 1");
-                }
-            }
-            
-            return Plugin_Continue;
+            return OnIndividualEnd();
         }
     }
 
@@ -738,6 +552,64 @@ public Action MeasureTimer(Handle timer, int index)
     g_iSimIndex = index;
     g_iSimCurrentFrame = 0;
     g_bSimulating = true;
+}
+
+Action OnIndividualEnd()
+{
+    g_bSimulating = false;
+
+    if(!g_bGAIndividualMeasured[g_iSimIndex])
+    {        
+        g_bGAIndividualMeasured[g_iSimIndex] = true;            
+        // Set amount of frames saved from cutoff limit
+        g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
+        CalculateFitness(g_iSimIndex);
+    }
+
+    // Return if playing back instead of measuring
+    if(g_bGAPlayback)
+    {
+        g_bGAPlayback = false;
+        CPrintToChatAll("%s Playback ended", g_cPrintPrefix);
+        return Plugin_Continue;
+    }
+
+    // Continue to the next individual if not last of population
+    g_iSimIndex++;
+
+    if(g_iSimIndex < POPULATION_SIZE)
+    {
+        MeasureFitness(g_iSimIndex);
+    }
+    else
+    {
+        // Get best fitness of population
+        float bestFitness = 0.0;
+        int fittestIndex = 0;
+        for(int i = 0; i < POPULATION_SIZE; i++)
+        {
+            if(g_fGAIndividualFitness[i] > bestFitness)
+            {
+                bestFitness = g_fGAIndividualFitness[i];
+                fittestIndex = i;
+            }
+        }
+
+        PrintToServer("%s Generation %d | best: %d (%f) | imp+: %d", g_cPrintPrefixNoColor, g_iCurrentGen, fittestIndex, bestFitness, g_iCurrentGen - g_iLastImproveGen);
+
+        // Continue to the next generation or stop looping
+        if(g_iTargetGen > g_iCurrentGen)
+        {
+            Breed();
+        }                        
+        else
+        {
+            PrintToServer("%s Finished loop", g_cPrintPrefixNoColor);
+            ServerCommand("host_timescale 1");
+        }
+    }
+    
+    return Plugin_Continue;
 }
 
 // Summary:
@@ -1247,34 +1119,6 @@ public void Breed()
     }
 
     g_iCurrentGen++;
-
-    // Typically we want to reduce mutation chance the longer 
-    // the algorithm has been running.
-    bool bReduce = true;
-
-    // However if we are stuck in a local maximum it might be 
-    // due to a mutation chance that is either too high or too low.
-    // Let's wiggle it about if we've been stuck for too long.
-    int iGenSinceImprove = g_iCurrentGen - g_iLastImproveGen;
-    if (iGenSinceImprove % 20 >= 15)
-    {
-        bReduce = false;
-    }
-
-    if (bReduce)
-    {
-        // Reduce mutation chance
-        g_fMutationChance = (g_fMutationChance + g_fMinMutationChance) * 0.5;
-        g_fRotationMutationChance = (g_fRotationMutationChance + g_fMinRotationMutationChance) * 0.5;
-    }
-    else
-    {
-        // Increase mutation chance
-        g_fMutationChance = (g_fMutationChance + g_fMaxMutationChance) * 0.5;
-        g_fRotationMutationChance = (g_fRotationMutationChance + g_fMaxRotationMutationChance) * 0.5;
-    }    
-
-    PrintToServer("%s Generation %d breeded! mC: %f, rMC: %f", g_cPrintPrefixNoColor, g_iCurrentGen, g_fMutationChance, g_fRotationMutationChance);
 
     ServerCommand("host_timescale %f", g_fTimeScale);  
 
@@ -2436,11 +2280,11 @@ public Action CmdSetMutationChance(int client, int args)
     {
         if(client == 0)
         {
-            PrintToServer("%s Missing number arguments", g_cPrintPrefixNoColor);
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
         }
         else
         {
-            CPrintToChat(client, "%s Missing number arguments", g_cPrintPrefix);
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
         }
 
         return Plugin_Handled;
@@ -2451,24 +2295,7 @@ public Action CmdSetMutationChance(int client, int args)
     GetCmdArg(1, arg, sizeof(arg));
 
     // Parse to float
-    if(!StringToFloatEx(arg, g_fMinMutationChance))
-    {
-        if(client == 0)
-        {
-            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
-        }
-        else
-        {
-            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
-        }
-
-        return Plugin_Handled;
-    }
-
-    GetCmdArg(2, arg, sizeof(arg));
-
-    // Parse to float
-    if(!StringToFloatEx(arg, g_fMaxMutationChance))
+    if(!StringToFloatEx(arg, g_fMutationChance))
     {
         if(client == 0)
         {
@@ -2484,11 +2311,11 @@ public Action CmdSetMutationChance(int client, int args)
 
     if(client == 0)
     {
-        PrintToServer("%s Mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinMutationChance, g_fMaxMutationChance);
+        PrintToServer("%s Mutation chance set to %f", g_cPrintPrefixNoColor, g_fMutationChance);
     }
     else
     {
-        CPrintToChat(client, "%s Mutation chance set to [%f:%f]", g_cPrintPrefix, g_fMinMutationChance, g_fMaxMutationChance);
+        CPrintToChat(client, "%s Mutation chance set to %f", g_cPrintPrefix, g_fMutationChance);
     }
 
     return Plugin_Handled;
@@ -2498,15 +2325,15 @@ public Action CmdSetMutationChance(int client, int args)
 // Handle rotation mutation chance command
 public Action CmdSetRotationMutationChance(int client, int args)
 {
-    if(args < 2)
+    if(args < 1)
     {
         if(client == 0)
         {
-            PrintToServer("%s Missing number arguments", g_cPrintPrefixNoColor);
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
         }
         else
         {
-            CPrintToChat(client, "%s Missing number arguments", g_cPrintPrefix);
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
         }
 
         return Plugin_Handled;
@@ -2517,24 +2344,7 @@ public Action CmdSetRotationMutationChance(int client, int args)
     GetCmdArg(1, arg, sizeof(arg));
 
     // Parse to float
-    if(!StringToFloatEx(arg, g_fMinRotationMutationChance))
-    {
-        if(client == 0)
-        {
-            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
-        }
-        else
-        {
-            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
-        }
-
-        return Plugin_Handled;
-    }
-
-    GetCmdArg(2, arg, sizeof(arg));
-
-    // Parse to float
-    if(!StringToFloatEx(arg, g_fMaxRotationMutationChance))
+    if(!StringToFloatEx(arg, g_fRotationMutationChance))
     {
         if(client == 0)
         {
@@ -2550,11 +2360,11 @@ public Action CmdSetRotationMutationChance(int client, int args)
 
     if(client == 0)
     {
-        PrintToServer("%s Rotation mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinRotationMutationChance, g_fMaxRotationMutationChance);
+        PrintToServer("%s Rotation mutation chance set to %f", g_cPrintPrefixNoColor, g_fRotationMutationChance);
     }
     else
     {
-        CPrintToChat(client, "%s Rotation mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinRotationMutationChance, g_fMaxRotationMutationChance);
+        CPrintToChat(client, "%s Rotation mutation chance set to %f", g_cPrintPrefixNoColor, g_fRotationMutationChance);
     }
 
     return Plugin_Handled;
