@@ -93,6 +93,7 @@ int g_iGAIndividualInputsInt[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE];  // Bu
 int g_iFrames;                                  // Frame cutoff (chromosome length)
 int g_iRecordingClient = -1;                    // Recording client index
 int g_iLeftOverFrames = 0;                      // Time saved by individual when reaching end
+int g_iSolutionStopDelay = -1;                  // Automatically stop looping after this many generations since first solution. <0 = disabled
 
 float g_fTimeScale = 1000.0;                    // Timescale used for simulating
 float g_fGAIndividualInputsFloat[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE][2];   // Angle inputs of individuals
@@ -130,7 +131,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.8",
+    version = "1.0.9",
     url = "https://github.com/laurirasanen"
 };
 
@@ -164,6 +165,7 @@ public void OnPluginStart()
     RegConsoleCmd("ga_frames", CmdSetFrames, "");           // Set frame cut-off
     RegConsoleCmd("ga_mutation_chance", CmdSetMutationChance, "");                  // Set mutation chance for buttons
     RegConsoleCmd("ga_rotation_mutation_chance", CmdSetRotationMutationChance, ""); // Set mutation chance for rotation
+    RegConsoleCmd("ga_solution_stop_delay", CmdSetSolutionStopDelay, ""); // Set delay for stopping after solution found
     
     // Manual generation commands
     RegConsoleCmd("ga_gen", CmdGen, "");        // Generate new population
@@ -456,8 +458,6 @@ public Action OnPlayerRunCmd_Bot(int client, int &buttons, int &impulse, float v
             // Set amount of frames saved from cutoff limit
             g_iLeftOverFrames = g_iFrames - g_iSimCurrentFrame;
             CalculateFitness(g_iSimIndex);
-
-            PrintToServer("%s %d reached the end in %d frames! (%f)", g_cPrintPrefixNoColor, g_iSimIndex, g_iSimCurrentFrame, g_fGAIndividualFitness[g_iSimIndex]);
 
             // Return if playing back instead of measuring
             if(g_bGAPlayback)
@@ -987,6 +987,18 @@ public void CalculateFitness(int individual)
         // This is to discourage the bot from just standing
         // still on a platform or on top of a ramp.
         g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 0.1;
+    }
+
+    if (g_bMadeToEnd && g_iSolutionStopDelay >= 0)
+    {
+        // Stop automatically after reaching end
+        if (g_iTargetGen - g_iCurrentGen > g_iSolutionStopDelay)
+        {
+            PrintToServer("- - - - - - - - - - - - - - - - - - - - - - - -");
+            PrintToServer("%s Reached end, stopping in %d generations.",  g_cPrintPrefixNoColor, g_iSolutionStopDelay);
+            PrintToServer("- - - - - - - - - - - - - - - - - - - - - - - -");
+            g_iTargetGen = g_iCurrentGen + g_iSolutionStopDelay;
+        }
     }
 
     // Reset end status
@@ -2545,6 +2557,55 @@ public Action CmdSetRotationMutationChance(int client, int args)
         CPrintToChat(client, "%s Rotation mutation chance set to [%f:%f]", g_cPrintPrefixNoColor, g_fMinRotationMutationChance, g_fMaxRotationMutationChance);
     }
 
+    return Plugin_Handled;
+}
+
+// Summary:
+// Handle setting automatic stop delay
+public Action CmdSetSolutionStopDelay(int client, int args)
+{
+    if(args < 1)
+    {
+        if(client == 0)
+        {
+            PrintToServer("%s Missing number argument", g_cPrintPrefixNoColor);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Missing number argument", g_cPrintPrefix);
+        }
+        return Plugin_Handled;
+    }
+
+    // Get number from command args
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+
+    // Parse to int
+    int iNum;
+    if(!StringToIntEx(arg, iNum))
+    {
+        if(client == 0)
+        {
+            PrintToServer("%s Failed to parse %s", g_cPrintPrefixNoColor, arg);
+        }
+        else
+        {
+            CPrintToChat(client, "%s Failed to parse %s", g_cPrintPrefix, arg);
+        }
+        return Plugin_Handled;
+    }
+
+    g_iSolutionStopDelay = iNum;
+
+    if(client == 0)
+    {
+        PrintToServer("%s Solution stop delay set to %d", g_cPrintPrefixNoColor, g_iSolutionStopDelay);
+    }
+    else
+    {
+        CPrintToChat(client, "%s Solution stop delay set to %d", g_cPrintPrefix, g_iSolutionStopDelay);
+    }
     return Plugin_Handled;
 }
 
