@@ -137,7 +137,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.15",
+    version = "1.0.16",
     url = "https://github.com/laurirasanen"
 };
 
@@ -612,11 +612,12 @@ Action OnIndividualEnd()
             }
         }
 
+        int timeElapsed = GetTime() - g_iLoopBeginTime;
         char timeStamp[9];
-        FormatUnixTimestamp(timeStamp, GetTime() - g_iLoopBeginTime);
+        FormatUnixTimestamp(timeStamp, timeElapsed);
 
         PrintToServer(
-            "%s Generation %d | best: i: %d, f: %f, t: %d | since imp: %d | elapsed: %s", 
+            "%s Generation %d | best i: %d, f: %f, t: %d | since imp: %d | elapsed: %s", 
             g_cPrintPrefixNoColor, 
             g_iCurrentGen, 
             fittestIndex, 
@@ -627,7 +628,7 @@ Action OnIndividualEnd()
         );
 
         // Save fitness data to file if applicable
-        SaveGenFitness(bestFitness, bestDuration);
+        SaveGenFitness(bestFitness, bestDuration, timeElapsed);
 
         // Continue to the next generation or stop looping
         if(g_iTargetGen > g_iCurrentGen)
@@ -646,7 +647,7 @@ Action OnIndividualEnd()
 
 // Summary:
 // Append current generation fitness to file
-void SaveGenFitness(float fBestFitness, int iBestDuration)
+void SaveGenFitness(float fBestFitness, int iBestDuration, int iTimeElapsed)
 {
     if (strlen(g_cFitnessOutFile) == 0) {
         return;
@@ -659,12 +660,8 @@ void SaveGenFitness(float fBestFitness, int iBestDuration)
         PrintToServer("%s Invalid file handle '%s'", g_cPrintPrefixNoColor, g_cFitnessOutFile);
         return;
     }
-
-    // A comma delimited format might be useful here
-    // if we ever want to write different kinds of data.
-    // But since we're only interested in fitness right now,
-    // and we call this explicitly every generation, this is fine.
-    g_hFile.WriteLine("%f, %d", fBestFitness, iBestDuration);
+    
+    g_hFile.WriteLine("%f, %d, %d", fBestFitness, iBestDuration, iTimeElapsed);
 
     g_hFile.Close();
 }
