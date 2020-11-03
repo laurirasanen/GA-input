@@ -137,7 +137,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.16",
+    version = "1.0.17",
     url = "https://github.com/laurirasanen"
 };
 
@@ -2683,6 +2683,7 @@ public Action CmdClear(int client, int args)
     g_iTargetGen = 0;
     g_iCurrentGen = 0;
     g_iLastImproveGen = 0;
+    g_fLastImproveFitness = -1000000000000.0;
 
     for(int i = 0; i < POPULATION_SIZE; i++)
     {
