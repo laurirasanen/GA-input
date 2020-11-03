@@ -93,9 +93,9 @@ public void FormatUnixTimestamp(char cTimeStamp[9], int iTime)
     char cMinutes[3];
     char cSeconds[3];
 
-    Format(cHours, 3, "%s%d", iHours < 9 ? "0" : "", iHours);
-    Format(cMinutes, 3, "%s%d", iMinutes < 9 ? "0" : "", iMinutes);
-    Format(cSeconds, 3, "%s%d", iSeconds < 9 ? "0" : "", iSeconds);
+    Format(cHours, 3, "%s%d", iHours < 10 ? "0" : "", iHours);
+    Format(cMinutes, 3, "%s%d", iMinutes < 10 ? "0" : "", iMinutes);
+    Format(cSeconds, 3, "%s%d", iSeconds < 10 ? "0" : "", iSeconds);
 
     Format(cTimeStamp, 9, "%s:%s:%s", cHours, cMinutes, cSeconds);
 }
