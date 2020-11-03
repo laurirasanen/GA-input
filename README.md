@@ -6,8 +6,11 @@ A genetic algorithm implemented in SourceMod that generates input sequences for 
 
 Requires [VoiDeD's botcontroller extension](https://github.com/VoiDeD/sourcemod-botcontroller/).
 
-[Available commands](https://github.com/laurirasanen/GA-input/blob/master/scripting/GA-input.sp#L128-L170)
+[Available commands](https://github.com/laurirasanen/GA-input/blob/master/scripting/GA-input.sp#L149-L193)
 
 ## Demo videos
 [![YouTube demo video](http://img.youtube.com/vi/RzLEOIzrDYI/0.jpg)](http://www.youtube.com/watch?v=RzLEOIzrDYI)  
 [![YouTube demo video](http://img.youtube.com/vi/qT_yc9nsJBk/0.jpg)](https://www.youtube.com/watch?v=qT_yc9nsJBk)
+
+## Publication
+[https://laurirasanen.github.io/pub/](https://laurirasanen.github.io/pub/)
