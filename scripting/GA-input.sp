@@ -90,6 +90,7 @@ int g_iTargetGen;                               // Target generation to generate
 int g_iCurrentGen;                              // Current generation index
 int g_iLastImproveGen;
 int g_iGAIndividualInputsInt[MAX_FRAMES/INPUT_INTERVAL][POPULATION_SIZE];  // Button inputs of individuals
+int g_iGAIndividualDuration[POPULATION_SIZE];   // The actual duration of individual attempt in ticks
 int g_iFrames;                                  // Frame cutoff (chromosome length)
 int g_iRecordingClient = -1;                    // Recording client index
 int g_iLeftOverFrames = 0;                      // Time saved by individual when reaching end
@@ -136,7 +137,7 @@ public Plugin myinfo =
     name = "GA-input",
     author = "laurirasanen",
     description = "Genetic algorithm for surf and rocketjump",
-    version = "1.0.14",
+    version = "1.0.15",
     url = "https://github.com/laurirasanen"
 };
 
@@ -600,12 +601,14 @@ Action OnIndividualEnd()
         // Get best fitness of population
         float bestFitness = 0.0;
         int fittestIndex = 0;
+        int bestDuration = 0;
         for(int i = 0; i < POPULATION_SIZE; i++)
         {
             if(g_fGAIndividualFitness[i] > bestFitness)
             {
                 bestFitness = g_fGAIndividualFitness[i];
                 fittestIndex = i;
+                bestDuration = g_iGAIndividualDuration[i];
             }
         }
 
@@ -613,17 +616,18 @@ Action OnIndividualEnd()
         FormatUnixTimestamp(timeStamp, GetTime() - g_iLoopBeginTime);
 
         PrintToServer(
-            "%s Generation %d | best: %d (%f) | imp^: %d | time: %s", 
+            "%s Generation %d | best: i: %d, f: %f, t: %d | since imp: %d | elapsed: %s", 
             g_cPrintPrefixNoColor, 
             g_iCurrentGen, 
             fittestIndex, 
             bestFitness, 
+            bestDuration,
             g_iCurrentGen - g_iLastImproveGen,
             timeStamp
         );
 
         // Save fitness data to file if applicable
-        SaveGenFitness(bestFitness);
+        SaveGenFitness(bestFitness, bestDuration);
 
         // Continue to the next generation or stop looping
         if(g_iTargetGen > g_iCurrentGen)
@@ -642,7 +646,7 @@ Action OnIndividualEnd()
 
 // Summary:
 // Append current generation fitness to file
-void SaveGenFitness(float fBestFitness)
+void SaveGenFitness(float fBestFitness, int iBestDuration)
 {
     if (strlen(g_cFitnessOutFile) == 0) {
         return;
@@ -660,7 +664,7 @@ void SaveGenFitness(float fBestFitness)
     // if we ever want to write different kinds of data.
     // But since we're only interested in fitness right now,
     // and we call this explicitly every generation, this is fine.
-    g_hFile.WriteLine("%f", fBestFitness);
+    g_hFile.WriteLine("%f, %d", fBestFitness, iBestDuration);
 
     g_hFile.Close();
 }
@@ -913,6 +917,8 @@ public void CalculateFitness(int individual)
         // still on a platform or on top of a ramp.
         g_fGAIndividualFitness[individual] += g_iLeftOverFrames * 0.1;
     }
+
+    g_iGAIndividualDuration[individual] = g_iFrames - g_iLeftOverFrames;
 
     if (g_bMadeToEnd && g_iSolutionStopDelay >= 0)
     {
