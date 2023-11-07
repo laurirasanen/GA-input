@@ -11,6 +11,3 @@ Requires [VoiDeD's botcontroller extension](https://github.com/VoiDeD/sourcemod-
 ## Demo videos
 [![YouTube demo video](http://img.youtube.com/vi/RzLEOIzrDYI/0.jpg)](http://www.youtube.com/watch?v=RzLEOIzrDYI)  
 [![YouTube demo video](http://img.youtube.com/vi/qT_yc9nsJBk/0.jpg)](https://www.youtube.com/watch?v=qT_yc9nsJBk)
-
-## Publication
-[https://laurirasanen.github.io/pub/](https://laurirasanen.github.io/pub/)
